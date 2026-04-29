@@ -201,7 +201,6 @@ class SpellShell : public QObject
   void buffLoad(const spellBuff*);
   void buff(const uint8_t*, size_t, uint8_t);
   void action(const uint8_t*, size_t, uint8_t);
-  void simpleMessage(const uint8_t* cmsg, size_t, uint8_t);
   void spellMessage(QString&);
   void zoneChanged(void);
   void killSpawn(const Item* deceased);

@@ -86,7 +86,6 @@ public:
    void updateNpcHP(const uint8_t* hpupdate);
    void updateSpawnInfo(const uint8_t* su);
    void updateStamina(const uint8_t* stam);
-   void updateEndurance(const uint8_t* end);
    void setLastKill(const QString& name, int level);
    void zoneChanged(void);
    void playerUpdateSelf(const uint8_t* pupdate, size_t, uint8_t);
@@ -145,8 +144,6 @@ public:
    uint32_t getCurrentAltExp() const { return m_currentAltExp; }
    uint16_t getCurrentAApts() const { return m_currentAApts; }
    uint16_t getFatigue() const { return m_fatigue; }
-   uint32_t getEnduranceCur() const { return m_enduranceCur; }
-   uint32_t getEnduranceMax() const { return m_enduranceMax; }
    
    const SeqColor& conColorBase(ColorLevel level);
    void setConColorBase(ColorLevel level, const SeqColor& color);
@@ -206,7 +203,6 @@ public:
                                );
                                
    void stamChanged            ( int, int, int, int);
-   void endChanged             ( uint32_t cur, uint32_t max );
   void hpChanged(int16_t, int16_t);
   void changedID(uint16_t oldPlayerID, uint16_t newPlayerID);
   void posChanged(int16_t x, int16_t y, int16_t z,
@@ -253,8 +249,6 @@ public:
   uint16_t m_food;
   uint16_t m_water;
   uint16_t m_fatigue;
-  uint32_t m_enduranceCur;
-  uint32_t m_enduranceMax;
   
   // ExperienceWindow needs this
   uint32_t m_currentAltExp;

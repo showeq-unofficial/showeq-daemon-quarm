@@ -8,20 +8,17 @@
 class SpawnShell;
 class Spells;
 
-// Parses OP_Action2 packets into structured combat events for the
-// websocket layer. Sits at the daemon level (one instance), so the
-// id→name and spellId→spellName lookups happen once per packet rather
-// than once per connected client.
+// Combat event emitter for the websocket layer. Originally fed by
+// OP_Action2 (post-EQMac). On EQ Mac the equivalent signal would come
+// from OP_Action (different struct shape), which has not been re-wired
+// yet — the class is kept as a dormant signal source so SessionAdapter
+// stays compilable. No slot is currently registered; combatEvent never
+// fires until a Mac-shaped action parser lands.
 class CombatRouter : public QObject {
     Q_OBJECT
 public:
     CombatRouter(SpawnShell* spawnShell, Spells* spells,
                  QObject* parent = nullptr);
-
-public slots:
-    // Wired to OP_Action2 by DaemonApp. Layout matches struct
-    // action2Struct in everquest.h:2042.
-    void action2(const uint8_t* data, size_t len, uint8_t dir);
 
 signals:
     void combatEvent(uint32_t sourceId, const QString& sourceName,

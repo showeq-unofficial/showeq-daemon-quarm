@@ -23,6 +23,7 @@
 
 /* Implementation of EQPacketStream class */
 #include "packetstream.h"
+#include "eqmac_decoder.h"
 #include "packetformat.h"
 #include "packetinfo.h"
 #include "diagnosticmessages.h"
@@ -95,7 +96,8 @@ EQPacketStream::EQPacketStream(EQStreamID streamid, uint8_t dir,
     m_sessionClientIP(0),
     m_maxLength(0),
     m_decodeKey(0),
-    m_validKey(true)
+    m_validKey(true),
+    m_eqmacDecoder(std::make_unique<EQMacDecoder>())
 {
     setObjectName(name);
 }
@@ -193,6 +195,7 @@ void EQPacketStream::reset()
   m_sessionClientIP = 0;
   m_sessionId = 0;
   m_sessionKey = 0;
+  if (m_eqmacDecoder) m_eqmacDecoder->reset();
 }
 
 ////////////////////////////////////////////////////
@@ -512,22 +515,12 @@ void EQPacketStream::handlePacket(EQUDPIPPacketFormat& packet)
   // Packet is ours now. Logging needs to know this later on.
   packet.setSessionKey(getSessionKey());
 
-  // Only accept packets if we've been initialized unless they are
-  // initialization packets!
-  if (packet.getNetOpCode() != OP_SessionRequest &&
-      packet.getNetOpCode() != OP_SessionResponse &&
-      ! m_sessionKey)
-  {
-#if (defined(PACKET_PROCESS_DIAG) && (PACKET_PROCESS_DIAG > 1)) || (defined(PACKET_SESSION_DIAG) && PACKET_SESSION_DIAG > 1)
-    seqDebug("discarding packet %s:%d ==>%s:%d netopcode=%04x size=%d. Session not initialized. Need to zone to start picking up packets. Session tracking %s.",
-      (const char*)packet.getIPv4SourceA(), packet.getSourcePort(),
-      (const char*)packet.getIPv4DestA(), packet.getDestPort(),
-      packet.getNetOpCode(), packet.payloadLength(),
-        (m_session_tracking_enabled == 2 ? "locked on" : 
-          (m_session_tracking_enabled == 1 ? "enabled" : "disabled")));
-#endif
-    return;
-  }
+  // (Removed: post-EQMac session-init filter that gated on
+  // packet.getNetOpCode() == OP_SessionRequest/Response/Packet/Combined.
+  // Those constants reflect the post-2005 SEQ wire layout. EQ Mac uses the
+  // OldStream layout where the first 2 bytes are bit-flagged HDR_INFO, so
+  // the filter would reject every legitimate Quarm packet. The new
+  // EQMacDecoder handles its own session/state filtering.)
 
   // Only accept packets that correspond to our latched client port, if
   // it is set. This helps filter out multiple sessions on the same physical
@@ -550,57 +543,28 @@ void EQPacketStream::handlePacket(EQUDPIPPacketFormat& packet)
     return;
   }
 
-  // Only accept packets that pass the EQ protocol-level CRC check. This helps
-  // weed out non-EQ packets that we might see.
-#ifdef APPLY_CRC_CHECK
-  if (packet.hasCRC())
+  // Run the UDP payload through the EQMac (Quarm) decoder. The post-EQMac
+  // protocol-packet path that used to live here (CRC + EQProtocolPacket::decode
+  // + processPacket recursion + ARQ cache) targets a different protocol
+  // generation; see eqmac_decoder.cpp for the wire-format notes. Each app
+  // packet the decoder unwraps is dispatched through the same code path the
+  // legacy combined/AppCombined unrollers used to feed into.
+  emit rawPacket(packet.getUDPPayload(), packet.getUDPPayloadLength(), m_dir,
+                 packet.getNetOpCode());
+
+  m_eqmacDecoder->process(
+      packet.getUDPPayload(), packet.getUDPPayloadLength(),
+      [this](uint16_t opcode, const uint8_t* data, size_t len) {
+        dispatchPacket(data, len, opcode, m_opcodeDB.find(opcode));
+      });
+
+  // Pick up any session-level state the decoder learned from a SessionResponse
+  // we happened to witness. Mid-session join leaves these zero, which
+  // downstream code already tolerates.
+  if (m_eqmacDecoder->sessionEstablished())
   {
-    uint16_t calcedCRC = calculateCRC(packet);
-// BSH
- if((packet.getSourcePort() == 8066) || (packet.getSourcePort() == 8067) || (packet.getSourcePort() == 8242) || (packet.getSourcePort() == 1900) || (packet.getDestPort() == 8066) || (packet.getDestPort() == 8067) || (packet.getDestPort() == 8242) || (packet.getDestPort() == 1900))
-	return;
-// BSH
-
-    if (calcedCRC != packet.crc())
-    {
-#if (defined(PACKET_PROCESS_DIAG))
-      seqDebug("INVALID PACKET: Bad CRC [%s:%d -> %s:%d] netOp %04x seq %04x len %d crc (%04x != %04x)",
-         (const char*)packet.getIPv4SourceA(), packet.getSourcePort(),
-         (const char*)packet.getIPv4DestA(), packet.getDestPort(),
-         packet.getNetOpCode(), packet.arqSeq(), packet.getUDPPayloadLength(),
-         packet.crc(), calcedCRC);
-#endif
-      return;
-    }
+    m_sessionKey = m_eqmacDecoder->sessionKey();
   }
-#endif /* APPLY_CRC_CHECK */
-
-  // Decode the packet first
-  if (! packet.decode(m_maxLength))
-  {
-    seqWarn("Packet decode failed for stream %s (%d), op %04x, flags %02x packet dropped.",
-      EQStreamStr[m_streamid], m_streamid, packet.getNetOpCode(),
-      packet.getFlags());
-    return;
-  }
-#ifdef PACKET_DECODE_DIAG
-  else if (packet.hasFlags())
-  {
-    seqDebug("Successful decode for stream %s (%d), op %04x, flags %02x.",
-        EQStreamStr[m_streamid], m_streamid, packet.getNetOpCode(),
-        packet.getFlags());
-  }
-#endif
-
-  // Raw packet
-  emit rawPacket(packet.rawPayload(), packet.rawPayloadLength(), m_dir, 
-    packet.getNetOpCode());
-
-  processPacket(packet, false); // false = isn't subpacket
-
-  // if the cache isn't empty, then process it.
-  if (!m_cache.empty()) 
-    processCache();
 }
 
 /////////////////////////////////////////////////////
@@ -792,6 +756,19 @@ void EQPacketStream::processPacket(EQProtocolPacket& packet, bool isSubpacket)
       uint16_t seq = packet.arqSeq();
       emit seqReceive(seq, (int)m_streamid);
 
+      // Mid-session join: if we have no session key we never saw the
+      // handshake, so sync the expected sequence to whatever arrives first
+      // rather than waiting for seq=0 to appear.
+      if (!m_sessionKey && !m_arqSeqFound)
+      {
+        m_arqSeqExp = seq;
+        m_arqSeqFound = true;
+        if (m_maxLength == 0)
+          m_maxLength = maxPacketSize;
+        seqInfo("EQPacket: mid-session join on stream %s, syncing ARQ to %u",
+          EQStreamStr[m_streamid], seq);
+      }
+
       // Future packet?
       if (seq == m_arqSeqExp)
       {
@@ -953,7 +930,7 @@ void EQPacketStream::processPacket(EQProtocolPacket& packet, bool isSubpacket)
     case OP_SessionRequest:
     {
       // Session request from client to server.
-      // 
+      //
       // Sanity check the size. Don't assume any packet we see is an EQ
       // session request, since we're gonna cause a huge freakin' malloc
       // on the maxlength of the session which for some reason some people

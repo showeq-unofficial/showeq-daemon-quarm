@@ -27,6 +27,7 @@
 #include <QObject>
 #include <QHash>
 #include <map>
+#include <memory>
 
 #include "packetcommon.h"
 #include "packetfragment.h"
@@ -43,6 +44,7 @@ class EQUDPIPPacketFormat;
 class EQProtocolPacket;
 class EQPacketOPCodeDB;
 class EQPacketOPCode;
+class EQMacDecoder;
 
 //----------------------------------------------------------------------
 // map type used for caching packets.
@@ -161,6 +163,9 @@ class EQPacketStream : public QObject
   // encryption
   int64_t m_decodeKey;
   bool m_validKey;
+
+  // EQMac (Quarm) wire decoder. Holds session/seq state per stream.
+  std::unique_ptr<EQMacDecoder> m_eqmacDecoder;
 };
 
 inline uint8_t EQPacketStream::sessionTracking()

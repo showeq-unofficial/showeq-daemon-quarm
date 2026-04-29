@@ -172,18 +172,25 @@ bool EQPacketPayload::setType(const EQPacketTypeDB& db,
   return true;
 }
 
-bool EQPacketPayload::match(const uint8_t* data, size_t size, 
+bool EQPacketPayload::match(const uint8_t* data, size_t size,
 			    uint8_t dir) const
 {
   switch(m_sizeCheckType)
   {
   case SZC_None:
-    return ((m_dir & dir) != 0);
+    // EQ Mac wire structs differ in size from this fork's everquest.h
+    // definitions (post-EQMac). Slots wired with sizechecktype="none" but
+    // a real typed struct (m_typeSize > 1) would otherwise read past the
+    // wire buffer end and SIGSEGV. Refuse the dispatch if the wire payload
+    // is shorter than the declared struct, even on SZC_None.
+    return ((m_dir & dir) != 0) &&
+           (m_typeSize <= 1 || size >= m_typeSize);
   case SZC_Match:
     return (((m_dir & dir) != 0) &&
 	    (m_typeSize == size));
   case SZC_Modulus:
     return (((m_dir & dir) != 0) &&
+	    (m_typeSize > 0) &&
 	    ((size % m_typeSize) == 0));
   default:
     break;

@@ -38,16 +38,13 @@ struct StructHint {
 // OP_GroupDisband + OP_GroupUpdate; etc. OP_GroupUpdate itself is
 // variable-length (SZC_None) so it has no hint and shows up only in the
 // raw unknown-opcode dump.
+// EQ Mac struct sizes from EQMacEmu/common/{patches/mac_structs.h,
+// eq_packet_structs.h}. Used by --opcode-stats to flag unknown opcodes
+// whose payload size matches a known struct.
 const StructHint kHints[] = {
     {"OP_Stamina",      "staminaStruct",          8, DIR_Server},
-    {"OP_EndUpdate",    "endUpdateStruct",       10, DIR_Server},
-    {"OP_HPUpdate",     "hpNpcUpdateStruct",     18, DIR_Server},
-    {"OP_ManaChange",   "manaDecrementStruct",   20, DIR_Server},
-    {"OP_Action2",      "action2Struct",         48, DIR_Server},
-    {"OP_Buff",         "buffStruct",           168, DIR_Server},
-    {"OP_GroupFollow",  "groupFollowStruct",    152, DIR_Server},
-    {"OP_GroupDisband", "groupDisbandStruct",   152, DIR_Server},
-    {"OP_GroupLeader",  "groupLeaderChangeStruct", 152, DIR_Server},
+    {"OP_HPUpdate",     "hpNpcUpdateStruct",     12, DIR_Server},
+    {"OP_ManaChange",   "manaDecrementStruct",    4, DIR_Server},
 };
 
 const char* dirLabel(uint8_t dir)

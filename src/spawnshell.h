@@ -131,27 +131,21 @@ public slots:
    void newSpawn(const spawnStruct& s);
    void playerUpdate2(const uint8_t*pupdate, size_t, uint8_t);
    void playerUpdate(const uint8_t*pupdate, size_t, uint8_t);
-   void npcMoveUpdate(const uint8_t*npcupdate, size_t, uint8_t);
    void updateSpawn(uint16_t id, 
 		    int16_t x, int16_t y, int16_t z,
 		    int16_t xVel, int16_t yVel, int16_t zVel,
 		    int8_t heading, int8_t deltaHeading,
 		    uint8_t animation);
-   void updateSpawns(const uint8_t* updates);
+   void updateSpawns(const uint8_t* updates, size_t len, uint8_t dir);
    void updateSpawnInfo(const uint8_t* spawnupdate);
-   void renameSpawn(const uint8_t* renameupdate);
    void illusionSpawn(const uint8_t* illusionupdate);
    void updateSpawnAppearance(const uint8_t* appearanceupdate);
-   void shroudSpawn(const uint8_t* spawnupdate, size_t, uint8_t);
    void updateNpcHP(const uint8_t* hpupdate);
    void spawnWearingUpdate(const uint8_t* wearing);
    void consMessage(const uint8_t* con, size_t, uint8_t);
    void clientTarget(const uint8_t* cts);
-   void removeSpawn(const uint8_t* rmSpawn, size_t len, uint8_t dir);
    void deleteSpawn(const uint8_t* delSpawn);
    void killSpawn(const uint8_t* deadspawn);
-   void respawnFromHover(const uint8_t* respawn, size_t len, uint8_t dir);
-   void corpseLoc(const uint8_t* corpseLoc);
 
    void playerChangedID(uint16_t oldPlayerID, uint16_t newPlayerID);
    void refilterSpawns();

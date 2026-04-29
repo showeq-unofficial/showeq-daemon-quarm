@@ -650,6 +650,15 @@ void EQPacket::dispatchPacket(EQUDPIPPacketFormat& packet)
     // Drop chat server traffic
     return;
   }
+  else if ((packet.getDestPort() == 7778) ||
+           (packet.getSourcePort() == 7778))
+  {
+    // Drop EQMac UCS (Universal Chat Server) traffic. Quarm's UCS lives on
+    // 7778 and uses a different protocol generation — its SessionResponse
+    // advertises Key=0xffffffff which would otherwise contaminate the zone
+    // decoder's session state.
+    return;
+  }
   else if ((packet.getDestPort() == WorldServerChatPort) ||
       (packet.getSourcePort() == WorldServerChatPort))
   {

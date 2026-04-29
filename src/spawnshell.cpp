@@ -33,6 +33,8 @@
 #include "player.h"
 #include "util.h"
 #include "guild.h"
+
+#include <algorithm>
 #ifdef SEQ_USE_RUST
 #include "seq-bridge-cxx/lib.h"
 #endif
@@ -572,284 +574,27 @@ void SpawnShell::zoneSpawns(const uint8_t* data, size_t len)
 
   const spawnStruct* zspawns = (const spawnStruct*)data;
 
-  for (int i = 0; i < spawndatasize; i++)
-  {
-#if 0
-  // Dump position updates for debugging spawn struct position changes
-  for (int j=54; j<70; i++)
-  {
-      printf("%.2x", zspawns[i][j]);
-
-      if ((j+1) % 8 == 0)
-      {
-          printf("    ");
-      }
-      else
-      {
-          printf(" ");
-      }
-  }
-  printf("\n");
-#endif
-
-#if 0
-    // Debug positioning without having to recompile everything...
-#pragma pack(1)
-struct pos
-{
-/*0004*/ unsigned pitch:12;
-	 signed   animation:10;                    // velocity 
-	 signed   deltaHeading:10;                 // change in heading 
-/*0008*/ signed   z:19;                            // z coord (3rd loc value)
-	 signed   deltaZ:13;                       // change in z
-/*0012*/ signed   deltaY:13;                       // change in y
-	 unsigned heading:12;                      // heading 
-         unsigned padding01:7;
-/*0016*/ signed   y:19;                            // y coord (2nd loc value)
-	 signed   deltaX:13;                       // change in x
-/*0020*/ signed   x:19;                            // x coord (1st loc value)
-	 unsigned padding02:13;
-/*0024*/ signed   unknown0001;                     // ***Placeholder
-/*0028*/	         
-};
-#endif
-
-#if 0
-#pragma pack(0)
-    struct pos *p = (struct pos *)(data + i*sizeof(spawnStruct) + 151);
-    printf("[%.2x](%f, %f, %f), dx %f dy %f dz %f head %f dhead %f anim %d (%x, %x, %x, %x)\n",
-            zspawns[i].spawnId, 
-            float(p->x)/8.0, float(p->y/8.0), float(p->z)/8.0, 
-            float(p->deltaX)/4.0, float(p->deltaY)/4.0, 
-            float(p->deltaZ)/4.0, 
-            float(p->heading), float(p->deltaHeading),
-            p->animation, p->padding0000, 
-            p->padding0005, p->padding0006, p->padding0014);
-#endif
+  for (int i = 0; i < spawndatasize; i++) {
     newSpawn(zspawns[i]);
   }
 }
 
 int32_t SpawnShell::fillSpawnStruct(spawnStruct *spawn, const uint8_t *data, size_t len, bool checkLen)
 {
-   /*
-   This reads data from the variable-length spawn struct
-   */
-
-	// uncomment for debug info
-//#define FILLSPAWNSTRUCT_DIAG
-
-   NetStream netStream(data, len);
-   int32_t retVal;
-   uint32_t race, nTmp;
-   uint8_t i;
-
-   QString name = netStream.readText();
-
-   if(name.length())
-      strcpy(spawn->name, name.toLatin1().data());
-
-#ifdef FILLSPAWNSTRUCT_DIAG
-   seqDebug("SpawnShell::fillSpawnStruct ---- %s", name.latin1());
-#endif
-
-   spawn->spawnId = netStream.readUInt32NC();
-
-   spawn->level = netStream.readUInt8();
-   // skip the next 16 bytes
-   netStream.skipBytes(16);
-
-   spawn->NPC = netStream.readUInt8();
-   spawn->miscData = netStream.readUInt32NC();
-
-   spawn->otherData = netStream.readUInt8();
-
-   // skip unknown3, unknown4
-   netStream.skipBytes(8);
-
-   /* & 1 is no longer chest/untargetable.  It is now bazaar /buyer flag as of 01/16/13.
-    * Not sure where chest/untargetable flag went, maybe combined with aura now.  Disabled to prevent crashes zoning into bazaar and seems
-    * to have no negative impact so far.
-   if(spawn->otherData & 1)
-   {
-      // it's a chest or untargetable
-
-      do
-         i = netStream.readUInt8();
-      while(i);
-
-      do
-         i = netStream.readUInt8();
-      while(i);
-
-      do
-         i = netStream.readUInt8();
-      while(i);
-
-      // skip next 3 longs
-      netStream.skipBytes(12);
-
-      // next it loops through 9 longs, but we can just skip them
-      netStream.skipBytes(36);
-
-      // skip 1 byte
-      netStream.skipBytes(1);
-
-      // skip the last long
-      netStream.skipBytes(4);
+   // EQ Mac wire after eqmac_decoder's decrypt+inflate is a single fixed
+   // 224-byte Spawn_Struct. The post-EQMac NetStream-serialized parser
+   // that used to live here doesn't apply.
+   if (len < sizeof(spawnStruct)) {
+     if (checkLen) {
+       seqDebug("SpawnShell::fillSpawnStruct: short read len=%zu < %zu",
+                len, sizeof(spawnStruct));
+     }
+     return 0;
    }
-   */
-
-   if(spawn->aura)	    // aura stuff
-   {
-       netStream.readText();	// skip 3 variable len strings
-       netStream.readText();
-       netStream.readText();
-       netStream.skipBytes(50);	// and 50 static bytes
-   }
-
-   spawn->charProperties = netStream.readUInt8();
-#ifdef FILLSPAWNSTRUCT_DIAG
-		   seqDebug("charProperties = %X", spawn->charProperties);
-#endif
-
-   i = spawn->charProperties;
-   //Handle body type of 0.  Started seeing this in Field of Scale after 01/16/13 patch.
-   if(i == 0)
-   {
-      spawn->bodytype = 0;
-   }
-   else
-   {
-      do
-      {
-           nTmp =  netStream.readUInt32NC();
-
-           if(i == spawn->charProperties)
-           {
-                   spawn->bodytype = nTmp;
-#ifdef FILLSPAWNSTRUCT_DIAG
-                   seqDebug("bodytype = %d", spawn->bodytype);
-#endif
-           }
-      }
-      while(--i);
-   }
-
-   spawn->curHp = netStream.readUInt8();
-#ifdef FILLSPAWNSTRUCT_DIAG
-   seqDebug("curHP=%d", spawn->curHp);
-#endif
-
-   // skip facestyle, walk/run speeds, unknown5
-   netStream.skipBytes(35);
-
-   spawn->race = netStream.readUInt32NC();
-   spawn->holding = netStream.readUInt8();
-   spawn->deity = netStream.readUInt32NC();
-   spawn->guildID = netStream.readUInt32NC();
-   spawn->guildServerID = netStream.readUInt32NC();
-   /* spawn->guildstatus = netStream.readUInt32NC();	disappeared 11/14/2018 */
-   spawn->guildstatus = 0;
-   spawn->class_ = netStream.readUInt32NC();
-
-#ifdef FILLSPAWNSTRUCT_DIAG
-   seqDebug("race=%08X holding=%02X deity=%08X guildID=%08X guildstatus=%08X class_=%02X ",
-		   spawn->race, spawn->holding, spawn->deity, spawn->guildID, spawn->guildstatus, spawn->class_);
-#endif
-
-   netStream.skipBytes(1);
-
-   spawn->state = netStream.readUInt8();
-   spawn->light = netStream.readUInt8();
-
-   netStream.skipBytes(1);
-
-   name = netStream.readText();
-
-   if(name.length() > 0 && name.length() < sizeof(spawn->lastName))
-   {
-      strcpy(spawn->lastName, name.toLatin1().data());
-   }
-
-   netStream.skipBytes(2);
-
-   spawn->petOwnerId = netStream.readUInt32NC();
-
-   // 12 bytes added to NPC only in 06/19/2013.
-   if (spawn->NPC == 1)
-   {
-       netStream.skipBytes(49);
-   }
-   else
-   {
-       netStream.skipBytes(37);
-   }
-   race = spawn->race;
-
-   // this is how the client checks if equipment should be read.
-   if(spawn->NPC == 0 || race <= 12 || race == 128 || race == 130 || race == 330 || race == 522)
-   {
-      // skip color
-      netStream.skipBytes(36);
-      for(i = 0; i < 9; i++)
-      {
-         spawn->equipment[i].itemId = netStream.readUInt32NC();
-         spawn->equipment[i].equip3 = netStream.readUInt32NC();
-         spawn->equipment[i].equip2 = netStream.readUInt32NC();
-         spawn->equipment[i].equip1 = netStream.readUInt32NC();
-         spawn->equipment[i].equip0 = netStream.readUInt32NC();
-      }
-   } else {
-      netStream.skipBytes(20);
-      spawn->equipment[7].itemId = netStream.readUInt32NC();
-      spawn->equipment[7].equip3 = netStream.readUInt32NC();
-      spawn->equipment[7].equip2 = netStream.readUInt32NC();
-      spawn->equipment[7].equip1 = netStream.readUInt32NC();
-      spawn->equipment[7].equip0 = netStream.readUInt32NC();
-      // secondary
-      spawn->equipment[8].itemId = netStream.readUInt32NC();
-      spawn->equipment[8].equip3 = netStream.readUInt32NC();
-      spawn->equipment[8].equip2 = netStream.readUInt32NC();
-      spawn->equipment[8].equip1 = netStream.readUInt32NC();
-      spawn->equipment[8].equip0 = netStream.readUInt32NC();
-   }
-
-   for (int i = 0; i < (sizeof(spawn->posData)/sizeof(spawn->posData[0])); ++i) {
-       spawn->posData[i] = netStream.readUInt32NC();
-   }
-
-   if(spawn->hasTitle)
-   {
-      name = netStream.readText();
-      strcpy(spawn->title, name.toLatin1().data());
-   }
-
-   if(spawn->hasSuffix)
-   {
-      name = netStream.readText();
-      strcpy(spawn->suffix, name.toLatin1().data());
-   }
-
-   // unknowns
-   netStream.skipBytes(8);
-
-   spawn->isMercenary = netStream.readUInt8();
-
-   // unknowns
-   netStream.skipBytes(66);
-
-   // now we're at the end
-
-   retVal = netStream.pos() - netStream.data();
-
-   if(checkLen && (int32_t)len != retVal)
-   {
-      seqDebug("SpawnShell::fillSpawnStruct - expected length: %d, read: %d for spawn '%s'", len, retVal, spawn->name);
-   }
-
-   return retVal;
+   memcpy(spawn, data, sizeof(spawnStruct));
+   return static_cast<int32_t>(sizeof(spawnStruct));
 }
+
 
 void SpawnShell::zoneEntry(const uint8_t* data, size_t len)
 {
@@ -986,195 +731,25 @@ void SpawnShell::playerUpdate2(const uint8_t* data, size_t len, uint8_t dir)
           pupdate->heading, pupdate->deltaHeading, pupdate->animation);
 }
 
-void SpawnShell::playerUpdate(const uint8_t* data, size_t len, uint8_t dir)
+void SpawnShell::playerUpdate(const uint8_t* data, size_t /*len*/, uint8_t dir)
 {
   // if zoning, then don't do anything
   if (m_zoneMgr->isZoning())
     return;
 
-#if 0
-  // Dump position updates for debugging client update changes
-  for (int i=0; i<len; i++)
-  {
-      printf("%.2x", data[i]);
+  // EQ Mac: server-direction OP_ClientUpdate broadcasts other players'
+  // positions as a single spawnPositionUpdate. Client-direction is the
+  // local player's own position, handled in Player::playerUpdateSelf.
+  if (dir == DIR_Client) return;
 
-      if ((i+1) % 8 == 0)
-      {
-          printf("    ");
-      }
-      else
-      {
-          printf(" ");
-      }
-  }
-  printf("\n");
-#endif
-
-  const playerSpawnPosStruct *pupdate = (const playerSpawnPosStruct *)data;
-
-  if (dir != DIR_Client)
-  {
-    int16_t y = pupdate->y >> 3;
-    int16_t x = pupdate->x >> 3;
-    int16_t z = pupdate->z >> 3;
-    
-    int16_t dy = pupdate->deltaY >> 2;
-    int16_t dx = pupdate->deltaX >> 2;
-    int16_t dz = pupdate->deltaZ >> 2;
-    
-#if 0
-    // Debug positioning without having to recompile everything...
-#pragma pack(1)
-    struct pos
-{
-	/*0000*/ uint16_t spawnId;
-	/*0002*/ uint16_t spawnId2;
-	/*0004*/ unsigned pitch:12;
-                 signed   y:19;                            // y coord (2nd loc value)		 
-	         unsigned padding00:1;
-	/*0008*/ signed   x:19;                            // x coord (1st loc value)	 
-                 signed   deltaX:13;                       // change in x
-	/*0012*/ signed   deltaHeading:10;                 // change in heading 
-	         signed   z:19;                            // z coord (3rd loc value)
-	         unsigned padding01:3;		 
-	/*0016*/ unsigned heading:12;                      // heading 
-		 signed   animation:10;                    // velocity
-	         unsigned padding02:10;		 
-	/*0020*/ signed   deltaY:13;                       // change in y
-                 signed   deltaZ:13;                       // change in z 
-	         unsigned padding03:6;		 
-	/*0024*/ 
-};
-#endif
-
-#if 0
-#pragma pack(0)
-    struct pos *p = (struct pos *)data;
-    if (p->spawnId == 0x49fd)
-        printf("[%.2x](%f, %f, %f), dx %f dy %f dz %f\n  head %d dhead %d anim %d pitch %d (%x, %x, %x, %x, %x, %x)\n",
-                p->spawnId, float(p->x)/8.0, float(p->y/8.0), float(p->z)/8.0,
-                float(p->deltaX)/4.0, float(p->deltaY)/4.0,
-                float(p->deltaZ)/4.0,
-                p->heading, p->deltaHeading,
-                p->animation, p->pitch,
-                p->padding00, p->padding01, p->padding02, p->padding03 );
-#endif
-
-    updateSpawn(pupdate->spawnId, x, y, z, dx, dy, dz,
-		pupdate->heading, pupdate->deltaHeading,pupdate->animation);
-  }
+  const playerSpawnPosStruct* p =
+      reinterpret_cast<const playerSpawnPosStruct*>(data);
+  updateSpawn(p->spawnId, p->x, p->y, p->z,
+              p->deltaX, p->deltaY, p->deltaZ,
+              p->heading, p->deltaHeading,
+              static_cast<uint8_t>(p->animation));
 }
 
-void SpawnShell::npcMoveUpdate(const uint8_t* data, size_t len, uint8_t dir)
-{
-/*
- * Wire format:
- * 2 bytes - spawnId
- * 6 bit - fieldSpecifier bitmask
- * 19 bit - y
- * 19 bit - x
- * 19 bit - z
- * 12 bit - heading
- * [Variable fields]
- *
- * Depending on bits set in fields:
- * 1 = 12 bit pitch
- * 2 = 10 bit delta heading  
- * 4 = 10 bit velocity
- * 8 = 13 bit delta y
- * 16= 13 bit delta x
- * 32 = 13 bit delta z
- *
- * Fields are in that order. For example, if the fieldSpecifier is
- * 1, then there is just 12 bits of pitch. If the fieldSpecifier is
- * 7, then there will be 10 bits of delta heading, 10 bits of animation,
- * and 13 bits of delta y. Other non-specified values are 0.
- *
- * Oh and the byte order needs to be converted too. How nice.
- */
-#define MASK_PITCH 0x01
-#define MASK_DELTA_HEADING 0x02
-#define MASK_ANIMATION 0x04
-#define MASK_DELTA_Y 0x08
-#define MASK_DELTA_X 0x10
-#define MASK_DELTA_Z 0x20
-
-    // Variable length movement packet. Sanity check.
-	if ((len < 13) || (len > 24)) 
-    {
-        // Ignore it.
-		seqWarn("Ignoring invalid length %d for movement packet", len);
-		return;
-	}
-
-    // if zoning, then don't do anything
-    if (m_zoneMgr->isZoning())
-    {
-        return;
-    }
-
-    // Pull data from the header.
-    BitStream stream(data, len);
-    
-    // spawnId.
-    uint16_t spawnId = stream.readUInt(16);
-
-    // BSH 13 Apr 2011 -- garbage added in packet
-    stream.readUInt(16);
-
-
-    // 6 bit field specifier.
-    uint8_t fieldSpecifier = stream.readUInt(6);
-
-    // 19 bit coords. 12 bit heading. All signed.
-    int16_t y = stream.readInt(19) >> 3;
-    int16_t x = stream.readInt(19) >> 3;
-    int16_t z = stream.readInt(19) >> 3;
-    int16_t heading = stream.readInt(12);
-
-    // Variable fields are 0 unless specified.
-    int16_t deltaX = 0;
-    int16_t deltaY = 0;
-    int16_t deltaZ = 0;
-    int8_t deltaHeading = 0;
-    int16_t velocity = 0;
-    int16_t pitch = 0;
-    
-    if (fieldSpecifier & MASK_PITCH)
-    {
-        // Pull off pitch. Seq doesn't pay attention to this.
-        pitch = stream.readInt(12);
-    }
-    if (fieldSpecifier & MASK_DELTA_HEADING)
-    {
-        // Pull off deltaHeading. It is 10 bits in length. Signed.
-        deltaHeading = stream.readInt(10) >> 2;
-    }
-    if (fieldSpecifier & MASK_ANIMATION)
-    {
-        // Pull off velocity. It is 10 bits in length.
-        velocity = stream.readInt(10) >> 2;
-    }
-    if (fieldSpecifier & MASK_DELTA_Y)
-    {
-        // Pull off deltaY. It is 13 bits in length. Signed.
-        deltaY = stream.readInt(13) >> 2;
-    }
-    if (fieldSpecifier & MASK_DELTA_X)
-    {
-        // Pull off deltaX. It is 13 bits in length. Signed,
-        deltaX = stream.readInt(13) >> 2;
-    }
-    if (fieldSpecifier & MASK_DELTA_Z)
-    {
-        // Pull off deltaZ. It is 13 bits in length. Signed.
-        deltaZ = stream.readInt(13) >> 2;
-    }
-
-    // And send the update.
-	updateSpawn(spawnId, x, y, z, 
-        deltaX, deltaY, deltaZ, heading, deltaHeading, velocity);
-}
 
 void SpawnShell::updateSpawn(uint16_t id, 
 			     int16_t x, int16_t y, int16_t z,
@@ -1250,88 +825,48 @@ void SpawnShell::updateSpawn(uint16_t id,
     }
 }
 
-void SpawnShell::updateSpawns(const uint8_t* data)
+void SpawnShell::updateSpawns(const uint8_t* data, size_t len, uint8_t /*dir*/)
 {
   // if zoning, then don't do anything
   if (m_zoneMgr->isZoning())
     return;
 
-#ifdef SEQ_USE_RUST
-  if (m_useRustMobUpdate) {
-    auto out = seq::rust::decode_mob_update(
-        rust::Slice<const uint8_t>{data, sizeof(spawnPositionUpdate)});
-    if (out.ok) {
-      updateSpawn(out.spawn_id,
-                  static_cast<int16_t>(out.x),
-                  static_cast<int16_t>(out.y),
-                  static_cast<int16_t>(out.z),
-                  0, 0, 0,
-                  static_cast<int8_t>(out.heading), 0, 0);
-      return;
-    }
-    // SZC_Match dispatch already guarantees the payload size; if Rust's
-    // length check fails, something is very wrong. Fall through to the
-    // C++ path defensively rather than dropping the packet.
-  }
-#endif
+  // EQ Mac OP_MobUpdate carries [int32_t numUpdates][N × spawnPositionUpdate].
+  // Sanity-bound the count by the available wire data so a corrupt header
+  // can't drive an out-of-bounds read.
+  if (len < sizeof(mobUpdateStruct))
+    return;
+  const mobUpdateStruct* batch = reinterpret_cast<const mobUpdateStruct*>(data);
+  const size_t maxFromLen =
+      (len - sizeof(mobUpdateStruct)) / sizeof(spawnPositionUpdate);
+  const size_t n =
+      std::min<size_t>(batch->numUpdates < 0 ? 0 : batch->numUpdates, maxFromLen);
 
-  const spawnPositionUpdate* updates = (const spawnPositionUpdate*)data;
-  updateSpawn(updates->spawnId,
-	      updates->x >> 3, updates->y >> 3, updates->z >> 3,
-	      0,0,0,updates->heading,0,0);
+  for (size_t i = 0; i < n; ++i) {
+    const spawnPositionUpdate& u = batch->spawnUpdate[i];
+    updateSpawn(u.spawnId,
+                u.x, u.y, u.z,
+                0, 0, 0,
+                u.heading, u.deltaHeading,
+                static_cast<uint8_t>(u.animation));
+  }
 }
 
 void SpawnShell::updateSpawnInfo(const uint8_t* data)
 {
+   // EQ Mac OP_WearChange is a model/equipment swap (slot + material +
+   // tint color). The post-EQMac SpawnUpdateStruct's subcommand-driven HP
+   // path doesn't apply here — HP comes via OP_HPUpdate. For v1 we just
+   // accept the packet so dispatch doesn't bounce; the visual model swap
+   // doesn't surface in the web client today.
    const SpawnUpdateStruct* su = (const SpawnUpdateStruct*)data;
 #ifdef SPAWNSHELL_DIAG
-   seqDebug("SpawnShell::updateSpawnInfo(id=%d, sub=%d, hp=%d, maxHp=%d)", 
-	  su->spawnId, su->subcommand, su->arg1, su->arg2);
+   seqDebug("SpawnShell::updateSpawnInfo(WearChange id=%d slot=%u material=%u)",
+            su->spawnId, su->wear_slot_id, su->material);
 #endif
-
-   Item* item = m_spawns.value(su->spawnId, nullptr);
-   if (item != NULL)
-   {
-     Spawn* spawn = (Spawn*)item;
-     switch(su->subcommand) {
-     case 17: // current hp update
-       spawn->setHP(su->arg1);
-       item->updateLastChanged();
-       emit changeItem(item, tSpawnChangedHP);
-       break;
-     }
-   }
+   (void)su;
 }
 
-void SpawnShell::renameSpawn(const uint8_t* data)
-{
-    const spawnRenameStruct* rename = (const spawnRenameStruct*)data;
-#ifdef SPAWNSHELL_DIAG
-    seqDebug("SpawnShell::renameSpawn(oldname=%s, newname=%s)",
-             rename->old_name, rename->new_name);
-#endif
-    
-    Spawn* renameMe = findSpawnByName(rename->old_name);
-
-    if (renameMe != NULL)
-    {
-        renameMe->setName(rename->new_name);
-
-        uint32_t changeType = tSpawnChangedName;
-
-        if (updateFilterFlags(renameMe))
-          changeType |= tSpawnChangedFilter;
-        if (updateRuntimeFilterFlags(renameMe))
-          changeType |= tSpawnChangedRuntimeFilter;
-
-        renameMe->updateLastChanged();
-        emit changeItem(renameMe, tSpawnChangedName);
-    }
-    else
-    {
-        seqWarn("SpawnShell: tried to rename %s to %s, but the original mob didn't exist in the spawn list", rename->old_name, rename->new_name);
-    }
-}
 
 void SpawnShell::illusionSpawn(const uint8_t* data)
 {
@@ -1364,44 +899,6 @@ void SpawnShell::illusionSpawn(const uint8_t* data)
         // OP_Illusion BEFORE the OP_NewSpawn, so they won't be
         // in the spawn list. Their spawnStruct will have their
         // illusioned race anyways.
-    }
-}
-
-void SpawnShell::shroudSpawn(const uint8_t* data, size_t len, uint8_t dir)
-{
-    // Self or other person shrouding. newSpawn handled updates too.
-
-    NetStream netStream(data,len);
-
-    uint32_t spawnID=netStream.readUInt32NC();
-    uint16_t spawnStructSize=netStream.readUInt16NC();
-    spawnStructSize-=6;
-
-    if(spawnID!=m_player->id())
-    {
-        // Shrouding other player
-        spawnShroudOther *shroud = new spawnShroudOther;
-        fillSpawnStruct(&shroud->spawn,netStream.pos(),spawnStructSize,true);
-        seqInfo("Shrouding %s (id=%d)", shroud->spawn.name, shroud->spawn.spawnId);
-        newSpawn(shroud->spawn);
-    }
-    else
-    {
-        // Shrouding yourself.
-        spawnShroudSelf *shroud = new spawnShroudSelf;
-
-        fillSpawnStruct(&shroud->spawn,netStream.pos(),spawnStructSize,true);
-        netStream.skipBytes(spawnStructSize);
-        memcpy(&shroud->profile,netStream.pos(),sizeof(playerProfileStruct));
-        seqInfo("Shrouding %s (id=%d)", shroud->spawn.name, shroud->spawn.spawnId);
-
-        m_player->loadProfile(shroud->profile);
-
-        // We just updated a lot of stuff.
-        updateFilterFlags(m_player);
-        updateRuntimeFilterFlags(m_player);
-        m_player->updateLastChanged();
-        emit changeItem(m_player, tSpawnChangedALL);
     }
 }
 
@@ -1539,49 +1036,6 @@ void SpawnShell::clientTarget(const uint8_t* data)
   emit targetSpawn(cts->newTarget);
 }
 
-void SpawnShell::removeSpawn(const uint8_t* data, size_t len, uint8_t dir)
-{
-  if(dir==DIR_Client)
-    return;
-  const removeSpawnStruct* rmSpawn = (const removeSpawnStruct*)data;
-#ifdef SPAWNSHELL_DIAG
-  seqDebug("SpawnShell::removeSpawn(id=%d)", rmSpawn->spawnId);
-#endif
-
-  Item *item;
-
-  if(len==sizeof(removeSpawnStruct))
-  {
-// BSH
-	deleteItem(tSpawn, rmSpawn->spawnId);
-// BSH
-
-    if(!rmSpawn->removeSpawn)
-    {
-      // Remove a spawn from outside the update radius
-      if(showeq_params->useUpdateRadius)
-      {
-        // Remove it
-        deleteItem(tSpawn, rmSpawn->spawnId);
-      }
-      else
-      {
-        // Set flag to change its icon
-        if((item=m_spawns.value(rmSpawn->spawnId, nullptr)))
-        {
-          Spawn *s=(Spawn*)item;
-          s->setNotUpdated(true);
-        }
-      }
-    }
-  }
-  else if((len+1)!=sizeof(removeSpawnStruct))
-  {
-    seqWarn("OP_RemoveSpawn (dataLen: %d) doesn't match: sizeof(removeSpawnStruct): %d",
-            len,sizeof(removeSpawnStruct));
-  }
-}
-
 void SpawnShell::deleteSpawn(const uint8_t* data)
 {
   const deleteSpawnStruct* delspawn = (const deleteSpawnStruct*)data;
@@ -1644,69 +1098,6 @@ void SpawnShell::killSpawn(const uint8_t* data)
    }
 }
 
-void SpawnShell::respawnFromHover(const uint8_t* data, size_t len, uint8_t dir)
-{
-   if(dir != DIR_Client)
-      return;
-#ifdef SPAWNSHELL_DIAG
-   seqDebug("SpawnShell::respawnFromHover()");
-#endif
-
-    // Our old player is a corpse, but we're rising from the dead. So
-    // we need to pop a corpse to represent our deadselves, invalidate
-    // the player, and then let the OP_ZoneEntry that is coming for the repop
-    // fix the player.
-    uint16_t corpseId = m_player->id();
-
-    // invalidate the player by severing it from its Id.
-    m_player->setID(0);
-
-    // Pop a corpse
-    Spawn* corpse = new Spawn((Spawn*) m_player, corpseId);
-
-    updateFilterFlags(corpse);
-    updateRuntimeFilterFlags(corpse);
-    m_spawns.insert(corpse->id(), corpse);
-
-    corpse->setGuildTag(m_guildMgr->guildIdToName(corpse->guildID(), corpse->guildServerID()));
-
-    emit addItem(corpse);
-
-    // send notification of new spawn count
-    emit numSpawns(m_spawns.count());
-}
-
-void SpawnShell::corpseLoc(const uint8_t* data)
-{
-  const corpseLocStruct* corpseLoc = (const corpseLocStruct*)data;
-  Item* item = m_spawns.value(corpseLoc->spawnId, nullptr);
-  if (item != NULL)
-  {
-    Spawn* spawn = (Spawn*)item;
-
-    // set the corpses location, and make sure it's not moving... 
-    if ((spawn->NPC() == SPAWN_PLAYER) || (spawn->NPC() == SPAWN_PC_CORPSE))
-    {
-        spawn->setPos(int16_t(corpseLoc->y), int16_t(corpseLoc->x), 
-                      int16_t(corpseLoc->z),
-                      showeq_params->walkpathrecord,
-                      showeq_params->walkpathlength);
-    }
-    else 
-    {
-        spawn->setPos(int16_t(corpseLoc->x), int16_t(corpseLoc->y), 
-                      int16_t(corpseLoc->z),
-                      showeq_params->walkpathrecord,
-                      showeq_params->walkpathlength);
-    }
-    spawn->killSpawn();
-    spawn->updateLast();
-    spawn->updateLastChanged();
-    
-    // signal that the spawn has changed
-    emit killSpawn(item, NULL, 0);
-  }
-}
 
 void SpawnShell::playerChangedID(uint16_t oldPlayerID, uint16_t newPlayerID)
 {

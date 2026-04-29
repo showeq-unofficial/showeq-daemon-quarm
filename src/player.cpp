@@ -154,8 +154,6 @@ void Player::clear()
   m_food = 0;
   m_water = 0;
   m_fatigue = 0;
-  m_enduranceCur = 0;
-  m_enduranceMax = 0;
 
   m_validStam = false;
   m_validMana = false;
@@ -167,7 +165,7 @@ void Player::clear()
   m_freshKill = false;
 
   m_heading = 0;
-  m_headingDegrees = 360 - ((m_heading * 360) >> 11);
+  m_headingDegrees = 360 - ((m_heading * 360) >> 8);
   
   setID(0);
   setPoint(0,0,0);
@@ -319,11 +317,11 @@ void Player::loadProfile(const playerProfileStruct& player)
   // done with mana
   m_validMana = true;
 
-  // location of bind point
+  // location of bind point — Mac: parallel arrays bind_x[5]/bind_y[5]/...
 #if 1
   seqDebug("Player::backfill(bind): Pos (%f/%f/%f) Heading: %f",
-	   player.binds[0].x, player.binds[0].y, player.binds[0].z, 
-       player.binds[0].heading);
+           player.bind_x[0], player.bind_y[0], player.bind_z[0],
+           player.bind_heading[0]);
 #endif
 
   // Exp handling
@@ -342,7 +340,10 @@ void Player::loadProfile(const playerProfileStruct& player)
   // copy in the spell book
   memcpy (&m_spellBookSlots[0], &player.sSpellBook[0], sizeof(m_spellBookSlots));
 
-  m_currentAApts = player.aa_spent;
+  // Mac: aapoints is the unspent count; expAA is exp toward next AA point.
+  // Showeq's m_currentAApts tracked SPENT AAs, which Mac doesn't separately
+  // store. Use 0 as a placeholder until we track spent count elsewhere.
+  m_currentAApts = 0;
 
   // Buffs
   int buffnumber;
@@ -377,12 +378,13 @@ void Player::player(const charProfileStruct* player)
   // if it's got a last name add it
   setLastName(player->lastName);
 
-  // Load the profile
-  loadProfile(player->profile);
+  // Load the profile (EQ Mac: charProfileStruct is the flat profile;
+  // playerProfileStruct is an alias).
+  loadProfile(*player);
 
   // Guild
   setGuildID(player->guildID);
-  setGuildServerID(player->guildServerID);
+  setGuildServerID(0);                            // no Mac equivalent
   setGuildTag(m_guildMgr->guildIdToName(guildID(), guildServerID()));
   emit guildChanged();
 
@@ -400,7 +402,9 @@ void Player::player(const charProfileStruct* player)
   seqDebug("Player::backfill(): Pos (%f/%f/%f) Heading: %f",
 	   player->x, player->y, player->z, player->heading);
   setHeading((int8_t)lrintf(player->heading), 0);
-  m_headingDegrees = 360 - ((((int8_t)lrintf(player->heading)) * 360) >> 11);
+  // EQ Mac: heading is 8-bit (was 12-bit on post-EQMac, hence the old >> 11).
+  m_headingDegrees =
+      360 - ((static_cast<uint8_t>(lrintf(player->heading)) * 360) >> 8);
   m_validPos = true;
   emit headingChanged(m_headingDegrees);
   emit posChanged(x(), y(), z(), 
@@ -431,161 +435,6 @@ void Player::player(const charProfileStruct* player)
   emit changeItem(this, tSpawnChangedALL);
 }
 
-#if 0 // ZBTEMP
-void Player::wearItem(const playerItemStruct* itemp)
-{
-  const itemItemStruct* item = &itemp->item;
-
-  if (item->equipSlot < 22)
-  {
-    bool manaAdjust = false;
-
-    if (item->STR != 0)
-    {
-      m_maxSTR += item->STR;
-      emit statChanged (LIST_STR, m_maxSTR, m_maxSTR);
-    }
-    
-    if (item->STA != 0)
-    {
-      m_maxSTA += item->STA;
-      emit statChanged (LIST_STA, m_maxSTA, m_maxSTA);
-    }
-
-    if (item->CHA != 0)
-    {
-      m_maxCHA += item->CHA;
-      emit statChanged (LIST_CHA, m_maxCHA, m_maxCHA);
-    }
-
-    if (item->DEX != 0)
-    {
-      m_maxDEX += item->DEX;
-      emit statChanged (LIST_DEX, m_maxDEX, m_maxDEX);
-    }
-
-    if (item->INT != 0)
-    {
-      m_maxINT += item->INT;
-      emit statChanged (LIST_INT, m_maxINT, m_maxINT);
-      manaAdjust = true;
-    }
-
-    if (item->AGI != 0)
-    {
-      m_maxAGI += item->AGI;
-      emit statChanged (LIST_AGI, m_maxAGI, m_maxAGI);
-    }
-
-    if (item->WIS != 0)
-    {
-      m_maxWIS += item->WIS;
-      emit statChanged (LIST_WIS, m_maxWIS, m_maxWIS);
-      manaAdjust = true;
-    }
-
-    m_plusHP += item->HP;
-
-    if (item->MANA != 0)
-    {
-      m_plusMana += item->MANA;
-      manaAdjust = true;
-    }
-
-    if (manaAdjust)
-    {
-      m_maxMana = calcMaxMana( m_maxINT,
-			       m_maxWIS,
-			       classVal(),
-			       level()
-			       )  +  m_plusMana;
-      
-      emit manaChanged(m_mana, m_maxMana);  /* Needs max mana */
-
-      m_validMana = true;
-    }
-
-    if (showeq_params->savePlayerState)
-      savePlayerState();
-  }
-}
-
-void Player::removeItem(const itemItemStruct* item)
-{
-  if (item->equipSlot < 22)
-  {
-    bool manaAdjust = false;
-
-    if (item->STR != 0)
-    {
-      m_maxSTR -= item->STR;
-      emit statChanged (LIST_STR, m_maxSTR, m_maxSTR);
-    }
-    
-    if (item->STA != 0)
-    {
-      m_maxSTA -= item->STA;
-      emit statChanged (LIST_STA, m_maxSTA, m_maxSTA);
-    }
-
-    if (item->CHA != 0)
-    {
-      m_maxCHA -= item->CHA;
-      emit statChanged (LIST_CHA, m_maxCHA, m_maxCHA);
-    }
-
-    if (item->DEX != 0)
-    {
-      m_maxDEX -= item->DEX;
-      emit statChanged (LIST_DEX, m_maxDEX, m_maxDEX);
-    }
-
-    if (item->INT != 0)
-    {
-      m_maxINT -= item->INT;
-      emit statChanged (LIST_INT, m_maxINT, m_maxINT);
-      manaAdjust = true;
-    }
-
-    if (item->AGI != 0)
-    {
-      m_maxAGI -= item->AGI;
-      emit statChanged (LIST_AGI, m_maxAGI, m_maxAGI);
-    }
-
-    if (item->WIS != 0)
-    {
-      m_maxWIS -= item->WIS;
-      emit statChanged (LIST_WIS, m_maxWIS, m_maxWIS);
-      manaAdjust = true;
-    }
-
-    m_plusHP -= item->HP;
-
-    if (item->MANA != 0)
-    {
-      m_plusMana -= item->MANA;
-      manaAdjust = true;
-    }
-
-    if (manaAdjust)
-    {
-      m_maxMana = calcMaxMana( m_maxINT,
-			     m_maxWIS,
-			     classVal(),
-			     level()
-			     )  +  m_plusMana;
-    
-      emit manaChanged(m_mana, m_maxMana);  /* Needs max mana */
-
-      m_validMana = true;
-    }
-
-    if (showeq_params->savePlayerState)
-      savePlayerState();
-  }
-}
-#endif // ZBTEMP
 
 void Player::increaseSkill(const uint8_t* data)
 {
@@ -659,19 +508,6 @@ void Player::updateExp(const uint8_t* data)
 {
   const expUpdateStruct* exp = (const expUpdateStruct*)data;
 
-  // if this is just setting the percentage, then do nothing (use info from
-  //   player packet).
-#if 0
-  if (exp->type == 0) 
-  {
-    // signal the setting of experience
-    emit setExp(m_currentExp, exp->exp, m_minExp, m_maxExp, m_tickExp);
-
-    // nothing more to do.
-    return;
-  }
-
-#endif
   uint32_t realExp = (m_tickExp * exp->exp) + m_minExp;
   uint32_t expIncrement;
   
@@ -790,27 +626,11 @@ void Player::updateNpcHP(const uint8_t* data)
     savePlayerState();
 }
 
-void Player::updateSpawnInfo(const uint8_t* data)
+void Player::updateSpawnInfo(const uint8_t* /*data*/)
 {
-  const SpawnUpdateStruct *su = (const SpawnUpdateStruct *)data;
-  if (su->spawnId != id())
-    return;
-
-  if (su->subcommand != 17)
-    return;
-
-  m_curHP = su->arg1;
-
-  m_validHP = true;
-
-  updateLastChanged();
-
-  emit changeItem(this, tSpawnChangedHP);
-
-  emit hpChanged(m_curHP, m_maxHP);
-
-  if (showeq_params->savePlayerState)
-    savePlayerState();
+  // EQ Mac OP_WearChange is an equipment/model swap, not a HP update — the
+  // post-EQMac SpawnUpdateStruct's subcommand-driven HP path doesn't apply.
+  // Player HP updates flow through OP_HPUpdate -> Player::updateNpcHP.
 }
 
 void Player::updateStamina(const uint8_t* data)
@@ -821,18 +641,6 @@ void Player::updateStamina(const uint8_t* data)
   m_validStam = true;
 
   emit stamChanged(m_food, 127, m_water, 127);
-
-  if (showeq_params->savePlayerState)
-    savePlayerState();
-}
-
-void Player::updateEndurance(const uint8_t* data)
-{
-  const endUpdateStruct* upd = (const endUpdateStruct*)data;
-  m_enduranceCur = upd->cur;
-  m_enduranceMax = upd->max;
-
-  emit endChanged(m_enduranceCur, m_enduranceMax);
 
   if (showeq_params->savePlayerState)
     savePlayerState();
@@ -880,68 +688,16 @@ void Player::playerUpdateSelf(const uint8_t* data, size_t len, uint8_t dir)
   int16_t pdeltaY = int16_t(pupdate->deltaY);
   int16_t pdeltaZ = int16_t(pupdate->deltaZ);
 
-#if 0
-  // Dump position updates for debugging client update changes
-  for (int i=0; i<sizeof(playerSelfPosStruct); i++)
-  {
-      printf("%.2x", data[i]);
-
-      if ((i+1) % 8 == 0)
-      {
-          printf("    ");
-      }
-      else
-      {
-          printf(" ");
-      }
-
-  }
-  printf("\n");
-#endif
-
-#if 0
-    // Debug positioning without having to recompile everything...
-#pragma pack(1)
-struct pos
-{
-	/*0000*/ uint16_t unknown0000;                   // ***Placeholder (update time counter?)
-	/*0002*/ uint16_t spawnId;                       // Player's spawn id
-	/*0004*/ uint16_t unknown0001;                   // ***Placeholder
-	/*0006*/ unsigned pitch:12;                      // pitch (up/down heading)
-	 	 unsigned padding01:20;
-	/*0010*/ float deltaX;                           // Change in x
-	/*0014*/ float deltaZ;                           // Change in z
-	/*0018*/ float x;                                // x coord (1st loc value)
-	/*0022*/ float y;                                // y coord (2nd loc value)
-	/*0026*/ signed animation:10;                    // velocity
-		 unsigned padding02:22;
-	/*0030*/ float z;                                // z coord (3rd loc value)
-	/*0034*/ float deltaY;                           // Change in y
-	/*0038*/ signed deltaHeading:10;                 // change in heading
-                 unsigned heading:12;                    // Heading
-		 unsigned padding03:10;
-	/*0042*/ 
-};
-#endif
-
-#if 0
-#pragma pack(0)
-    struct pos *p = (struct pos *)data;
-    printf("[%.2x](%f, %f, %f), dx %f dy %f dz %f head %d dhead %d anim %d pitch %d (%x, %x, %x, %x, %x)\n",
-            p->spawnId, p->x, p->y, p->z,
-            p->deltaX, p->deltaY, p->deltaZ,
-            p->heading, p->deltaHeading,
-            p->animation, p->pitch,
-            p->padding01, p->padding02, p->padding03 );
-#endif
-
   setPos(px, py, pz, showeq_params->walkpathrecord, showeq_params->walkpathlength);
   setDeltas(pdeltaX, pdeltaY, pdeltaZ);
   setHeading(pupdate->heading, pupdate->deltaHeading);
   m_validPos = true;
   updateLast();
 
-  m_headingDegrees = 360 - ((pupdate->heading * 360) >> 11);
+  // EQ Mac heading is int8_t (0..255 unsigned interpretation maps to 0..360°).
+  // post-EQMac was 12-bit (>> 11) — shift adjusted accordingly.
+  m_headingDegrees =
+      360 - ((static_cast<uint8_t>(pupdate->heading) * 360) >> 8);
   emit headingChanged(m_headingDegrees);
 
   emit posChanged(x(), y(), z(), 

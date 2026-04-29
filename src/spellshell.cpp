@@ -396,44 +396,6 @@ void SpellShell::action(const uint8_t* data, size_t, uint8_t)
   }
 }
 
-void SpellShell::simpleMessage(const uint8_t* data, size_t, uint8_t)
-{
-  // if no spell cast by the player recently, then nothing to do.
-  if (!m_lastPlayerSpell)
-    return;
-
-  const simpleMessageStruct* smsg = (const simpleMessageStruct*)data;
-  switch(smsg->messageFormat)
-  {
-  case 191: // Your target has no mana to affect
-  case 239: // Your target cannot be mesmerized.
-  case 240: // Your target cannot be mesmerized (with this spell).
-  case 242: // Your target is immune to changes in its attack speed.
-  case 243: // Your target is immune to fear spells.
-  case 244: // Your target is immune to changes in its run speed.
-  case 245: // You are unable to change form here.
-  case 248: // Your target is too high of a level for your charm spell.
-  case 251: // That spell can not affect this target NPC.
-  case 253: // This pet may not be made invisible.
-  case 255: // You do not have a pet.
-  case 263: // Your spell did not take hold.
-  case 264: // Your target has resisted your attempt to mesmerize it.
-  case 268: // Your target looks unaffected.
-  case 269: // Stick to singing until you learn to play this instrument.
-  case 271: // Your spell would not have taken hold on your target.
-  case 272: // You are missing some required spell components.
-  case 439: // Your spell is interrupted.
-  case 3285: // Your target is too powerful to be Castigated in this manner.
-  case 9035: // Your target is too high of a level for your fear spell.
-  case 9036: // This spell only works in the Planes of Power.
-    // delete the last player spell
-    deleteSpell(m_lastPlayerSpell);
-    m_lastPlayerSpell = 0;
-    break;
-  default:
-    break;
-  }
-}
 
 
 void SpellShell::spellMessage(QString &str)

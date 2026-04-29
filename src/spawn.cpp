@@ -486,17 +486,20 @@ void Spawn::update(const spawnStruct* s)
   setHP(s->curHp);
   setMaxHP(100); //the client sets this to 100
   setGuildID(s->guildID);
-  setGuildServerID(s->guildServerID);
+  setGuildServerID(0);                            // no Mac equivalent
   setLevel(s->level);
-  for (int i = 0; i <= tLastCoreWearSlot; i++)
-    setEquipment(i, s->equipment[i]);
+  for (int i = 0; i <= tLastCoreWearSlot; i++) {
+    EquipStruct e{};
+    e.itemId = s->equipment[i];                   // Mac: just a material id
+    setEquipment(i, e);
+  }
   setEquipment(tUnknown1, SlotEmpty);
 
   setTypeflag(s->bodytype);
-  setGM(s->gm);
+  setGM(s->GM);
   setIsMount(calcIsMount(s->race, s->level));
-  setIsMercenary(s->isMercenary);
-  setIsAura(s->aura);
+  setIsMercenary(0);                              // no Mac equivalent
+  setIsAura(0);                                   // no Mac equivalent
 
   // If it is a corpse with Unknown (NPC) religion.
   if ((s->NPC == SPAWN_PC_CORPSE) && (s->deity == DEITY_UNKNOWN))
@@ -581,9 +584,13 @@ void Spawn::backfill(const spawnStruct* s)
   }
 
   // only change unknown equipment
-  for (i = 0; i <= tLastCoreWearSlot; i++)
-    if (equipment(i).itemId == SlotEmpty.itemId)
-      setEquipment(i, s->equipment[i]);
+  for (i = 0; i <= tLastCoreWearSlot; i++) {
+    if (equipment(i).itemId == SlotEmpty.itemId) {
+      EquipStruct e{};
+      e.itemId = s->equipment[i];
+      setEquipment(i, e);
+    }
+  }
 
   // only change unknown or no light
   if (light() == 0)
@@ -597,7 +604,7 @@ void Spawn::backfill(const spawnStruct* s)
   if (s->NPC == SPAWN_PLAYER || s->NPC == SPAWN_SELF)
   {
     setGuildID(s->guildID);
-    setGuildServerID(s->guildServerID);
+    setGuildServerID(0);                          // no Mac equivalent
   }
   else
     setGuildID(0xffff);

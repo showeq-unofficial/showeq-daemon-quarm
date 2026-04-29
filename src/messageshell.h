@@ -60,7 +60,6 @@ class MessageShell : public QObject
  public slots:
    void channelMessage(const uint8_t* cmsg, size_t, uint8_t);
    void formattedMessage(const uint8_t* cmsg, size_t, uint8_t);
-   void simpleMessage(const uint8_t* cmsg, size_t, uint8_t);
    void specialMessage(const uint8_t* smsg, size_t, uint8_t);
    void guildMOTD(const uint8_t* gmotd, size_t, uint8_t);
    void consent(const uint8_t* consent, size_t, uint8_t);

@@ -434,19 +434,6 @@ void DaemonApp::wireZoneMgr()
                        "newZoneStruct", SZC_Match,
                        m_zoneMgr,
                        SLOT(zoneNew(const uint8_t*, size_t, uint8_t)));
-    m_packet->connect2("OP_SendZonePoints", SP_Zone, DIR_Server,
-                       "zonePointsStruct", SZC_None,
-                       m_zoneMgr,
-                       SLOT(zonePoints(const uint8_t*, size_t, uint8_t)));
-    m_packet->connect2("OP_DzSwitchInfo", SP_Zone, DIR_Server,
-                       "dzSwitchInfo", SZC_None,
-                       m_zoneMgr,
-                       SLOT(dynamicZonePoints(const uint8_t*, size_t, uint8_t)));
-    m_packet->connect2("OP_DzInfo", SP_Zone, DIR_Server,
-                       "dzInfo", SZC_None,
-                       m_zoneMgr,
-                       SLOT(dynamicZoneInfo(const uint8_t*, size_t, uint8_t)));
-
     connect(m_zoneMgr, SIGNAL(playerProfile(const charProfileStruct*)),
             m_player,  SLOT(player(const charProfileStruct*)));
 
@@ -480,12 +467,18 @@ void DaemonApp::wireSpawnShell()
                        "uint8_t", SZC_None,
                        m_spawnShell,
                        SLOT(zoneEntry(const uint8_t*, size_t)));
-    m_packet->connect2("OP_MobUpdate", SP_Zone, DIR_Server|DIR_Client,
-                       "spawnPositionUpdate", SZC_Match,
+    m_packet->connect2("OP_ZoneSpawns", SP_Zone, DIR_Server,
+                       "spawnStruct", SZC_None,
                        m_spawnShell,
-                       SLOT(updateSpawns(const uint8_t*)));
-    m_spawnShell->setUseRustMobUpdate(
-        m_cfg.rustOpcodes.contains(QStringLiteral("OP_MobUpdate")));
+                       SLOT(zoneSpawns(const uint8_t*, size_t)));
+    m_packet->connect2("OP_NewSpawn", SP_Zone, DIR_Server,
+                       "spawnStruct", SZC_None,
+                       m_spawnShell,
+                       SLOT(newSpawn(const uint8_t*)));
+    m_packet->connect2("OP_MobUpdate", SP_Zone, DIR_Server|DIR_Client,
+                       "mobUpdateStruct", SZC_None,
+                       m_spawnShell,
+                       SLOT(updateSpawns(const uint8_t*, size_t, uint8_t)));
     m_packet->connect2("OP_WearChange", SP_Zone, DIR_Server|DIR_Client,
                        "SpawnUpdateStruct", SZC_Match,
                        m_spawnShell,
@@ -498,9 +491,9 @@ void DaemonApp::wireSpawnShell()
     // Player-vital wirings. Each handler filters by spawnId == self
     // so the same opcodes route through both SpawnShell (any-spawn
     // updates) and Player (only when packet is for the local PC).
-    // Mirrors showeq/src/interface.cpp:909-1018. OP_Stamina (hunger /
-    // thirst) and OP_EndUpdate (run/jump endurance bar) were resolved
-    // 2026-04-28; both are now wired and fire on real packets.
+    // Mirrors showeq/src/interface.cpp:909-1018. OP_Stamina is
+    // wired even though its opcode is still id="ffff" — once it's
+    // resolved the slot fires automatically without code changes.
     m_packet->connect2("OP_HPUpdate", SP_Zone, DIR_Server|DIR_Client,
                        "hpNpcUpdateStruct", SZC_Match,
                        m_player,
@@ -513,10 +506,6 @@ void DaemonApp::wireSpawnShell()
                        "staminaStruct", SZC_Match,
                        m_player,
                        SLOT(updateStamina(const uint8_t*)));
-    m_packet->connect2("OP_EndUpdate", SP_Zone, DIR_Server,
-                       "endUpdateStruct", SZC_Match,
-                       m_player,
-                       SLOT(updateEndurance(const uint8_t*)));
     m_packet->connect2("OP_WearChange", SP_Zone, DIR_Server|DIR_Client,
                        "SpawnUpdateStruct", SZC_Match,
                        m_player,
@@ -525,10 +514,6 @@ void DaemonApp::wireSpawnShell()
                        "deleteSpawnStruct", SZC_Match,
                        m_spawnShell,
                        SLOT(deleteSpawn(const uint8_t*)));
-    m_packet->connect2("OP_SpawnRename", SP_Zone, DIR_Server,
-                       "spawnRenameStruct", SZC_Match,
-                       m_spawnShell,
-                       SLOT(renameSpawn(const uint8_t*)));
     m_packet->connect2("OP_Illusion", SP_Zone, DIR_Server|DIR_Client,
                        "spawnIllusionStruct", SZC_Match,
                        m_spawnShell,
@@ -541,14 +526,6 @@ void DaemonApp::wireSpawnShell()
                        "newCorpseStruct", SZC_Match,
                        m_spawnShell,
                        SLOT(killSpawn(const uint8_t*)));
-    m_packet->connect2("OP_Shroud", SP_Zone, DIR_Server,
-                       "spawnShroudSelf", SZC_None,
-                       m_spawnShell,
-                       SLOT(shroudSpawn(const uint8_t*, size_t, uint8_t)));
-    m_packet->connect2("OP_RemoveSpawn", SP_Zone, DIR_Server|DIR_Client,
-                       "removeSpawnStruct", SZC_None,
-                       m_spawnShell,
-                       SLOT(removeSpawn(const uint8_t*, size_t, uint8_t)));
     m_packet->connect2("OP_Consider", SP_Zone, DIR_Server|DIR_Client,
                        "considerStruct", SZC_Match,
                        m_spawnShell,
@@ -557,27 +534,11 @@ void DaemonApp::wireSpawnShell()
                        "clientTargetStruct", SZC_Match,
                        m_spawnShell,
                        SLOT(clientTarget(const uint8_t*)));
-    m_packet->connect2("OP_NpcMoveUpdate", SP_Zone, DIR_Server,
-                       "uint8_t", SZC_None,
-                       m_spawnShell,
-                       SLOT(npcMoveUpdate(const uint8_t*, size_t, uint8_t)));
     m_packet->connect2("OP_ClientUpdate", SP_Zone, DIR_Server,
                        "playerSpawnPosStruct", SZC_Match,
                        m_spawnShell,
                        SLOT(playerUpdate(const uint8_t*, size_t, uint8_t)));
-    m_packet->connect2("OP_CorpseLocResponse", SP_Zone, DIR_Server,
-                       "corpseLocStruct", SZC_Match,
-                       m_spawnShell,
-                       SLOT(corpseLoc(const uint8_t*)));
-
-    // Chat. OP_CommonMessage carries the player-to-player channels
-    // (/say /tell /guild /group /raid /shout /auction /ooc) parsed by
-    // MessageShell::channelMessage; the matching legacy
-    // showeq/src/interface.cpp:679 wires it under the same name. The
-    // daemon was previously asking for "OP_ChannelMessage", which
-    // isn't in conf/zoneopcodes.xml, so the slot never fired and chat
-    // was silently dropped.
-    m_packet->connect2("OP_CommonMessage", SP_Zone, DIR_Client|DIR_Server,
+    m_packet->connect2("OP_ChannelMessage", SP_Zone, DIR_Client|DIR_Server,
                        "channelMessageStruct", SZC_None,
                        m_messageShell,
                        SLOT(channelMessage(const uint8_t*, size_t, uint8_t)));
@@ -590,10 +551,6 @@ void DaemonApp::wireSpawnShell()
                        "formattedMessageStruct", SZC_None,
                        m_messageShell,
                        SLOT(formattedMessage(const uint8_t*, size_t, uint8_t)));
-    m_packet->connect2("OP_SimpleMessage", SP_Zone, DIR_Server,
-                       "simpleMessageStruct", SZC_Match,
-                       m_messageShell,
-                       SLOT(simpleMessage(const uint8_t*, size_t, uint8_t)));
     m_packet->connect2("OP_SpecialMesg", SP_Zone, DIR_Server,
                        "specialMessageStruct", SZC_None,
                        m_messageShell,
@@ -618,10 +575,6 @@ void DaemonApp::wireSpawnShell()
                        "groupDisbandStruct", SZC_None,
                        m_groupMgr,
                        SLOT(removeGroupMember(const uint8_t*)));
-    m_packet->connect2("OP_GroupDisband2", SP_Zone, DIR_Server,
-                       "groupDisbandStruct", SZC_None,
-                       m_groupMgr,
-                       SLOT(removeGroupMember(const uint8_t*)));
 
     // SpellShell — mirrors showeq/src/interface.cpp:973-988.
     m_packet->connect2("OP_CastSpell", SP_Zone, DIR_Server|DIR_Client,
@@ -640,17 +593,6 @@ void DaemonApp::wireSpawnShell()
                        "actionAltStruct", SZC_Match,
                        m_spellShell,
                        SLOT(action(const uint8_t*, size_t, uint8_t)));
-    m_packet->connect2("OP_SimpleMessage", SP_Zone, DIR_Server,
-                       "simpleMessageStruct", SZC_Match,
-                       m_spellShell,
-                       SLOT(simpleMessage(const uint8_t*, size_t, uint8_t)));
-
-    // Combat events. action2Struct carries damage data (showeq handles
-    // this in interface.cpp around line 4950). OP_Action2 is server-side.
-    m_packet->connect2("OP_Action2", SP_Zone, DIR_Client|DIR_Server,
-                       "action2Struct", SZC_Match,
-                       m_combatRouter,
-                       SLOT(action2(const uint8_t*, size_t, uint8_t)));
 }
 
 static QStringList mapSearchPaths(const QString& override,

@@ -83,39 +83,35 @@ MessageShell::MessageShell(Messages* messages, EQStr* eqStrings,
 
 void MessageShell::channelMessage(const uint8_t* data, size_t len, uint8_t dir)
 {
-// Added for 8/12/09 patch for serialized message packet ----------------------
-   QString qTmp;
-   NetStream netStream(data, len);
+   // EQ Mac OP_ChannelMessage is fixed-offset (target[64] + sender[64] +
+   // 4×uint16 + variable message), not the post-2009 NetStream-serialized
+   // format the upstream showeq parses. Validate len, then read directly.
+   if (len < sizeof(channelMessageStruct) - sizeof(((channelMessageStruct*)0)->message)) {
+     return;
+   }
+   const channelMessageStruct* wire =
+       reinterpret_cast<const channelMessageStruct*>(data);
 
    channelMessageStruct *cmsg = new channelMessageStruct;
    memset(cmsg, 0, sizeof(channelMessageStruct));
 
-   qTmp = netStream.readText(); // sender
+   // Bound-copy each NUL-terminated string field.
+   strncpy(cmsg->target, wire->target, sizeof(cmsg->target) - 1);
+   strncpy(cmsg->sender, wire->sender, sizeof(cmsg->sender) - 1);
+   cmsg->language        = wire->language;
+   cmsg->chanNum         = wire->chanNum;
+   cmsg->skillInLanguage = wire->skillInLanguage;
 
-   if(qTmp.length())
-      strcpy(cmsg->sender, qTmp.toLatin1().data());
-
-   qTmp = netStream.readText(); // target
-
-   if(qTmp.length())
-      strcpy(cmsg->target, qTmp.toLatin1().data());
-
-   netStream.skipBytes(8); // Unknown
-
-   cmsg->language = netStream.readUInt32NC(); // language
-
-   cmsg->chanNum = netStream.readUInt32NC(); // channel
-
-   netStream.readUInt32(); // unknown
-   netStream.readUInt8(); // unknown
-
-   cmsg->skillInLanguage = netStream.readUInt32NC(); // skill
-
-   qTmp = netStream.readText(); // message
-   if(qTmp.length())
-      strcpy(cmsg->message, qTmp.toLatin1().data());
-
-//-----------------------------------------------------------------------------
+   // Message field is variable length within the wire payload — copy up to
+   // the wire length minus the fixed header.
+   const size_t msgOff = offsetof(channelMessageStruct, message);
+   if (len > msgOff) {
+     const size_t avail = len - msgOff;
+     const size_t cap = sizeof(cmsg->message) - 1;
+     const size_t n = avail < cap ? avail : cap;
+     memcpy(cmsg->message, data + msgOff, n);
+     cmsg->message[n] = '\0';
+   }
 
   // Tells and Group by us happen twice *shrug*. Ignore the client->server one.
   if (dir == DIR_Client &&
@@ -283,20 +279,6 @@ void MessageShell::formattedMessage(const uint8_t* data, size_t len, uint8_t dir
   emit chatMessage(static_cast<uint32_t>(mt), QString(), QString(), text);
 }
 
-void MessageShell::simpleMessage(const uint8_t* data, size_t len, uint8_t dir)
-{
-  // avoid client chatter and do nothing if not viewing channel messages
-  if (dir == DIR_Client)
-    return;
-
-  const simpleMessageStruct* smsg = (const simpleMessageStruct*)data;
-  QString tempStr;
-
-  const MessageType mt = chatColor2MessageType(smsg->messageColor);
-  const QString text = stripEqItemLinks(m_eqStrings->message(smsg->messageFormat));
-  m_messages->addMessage(mt, text);
-  emit chatMessage(static_cast<uint32_t>(mt), QString(), QString(), text);
-}
 
 void MessageShell::specialMessage(const uint8_t* data, size_t, uint8_t dir)
 {
@@ -839,102 +821,54 @@ void MessageShell::groupLeaderChange(const uint8_t* data)
 
 void MessageShell::player(const charProfileStruct* player)
 {
+  // EQ Mac: charProfileStruct is the flat PlayerProfile_Struct (no
+  // .profile sub-struct, no LDON / shared bank / DoN crystals).
   QString message;
 
-  message = QString::asprintf("Name: '%s' Last: '%s'", 
-		  player->name, player->lastName);
+  message = QString::asprintf("Name: '%s' Last: '%s'",
+                              player->name, player->lastName);
   m_messages->addMessage(MT_Player, message);
 
-  message = QString::asprintf("Level: %d", player->profile.level);
+  message = QString::asprintf("Level: %d", player->level);
   m_messages->addMessage(MT_Player, message);
-  
+
   message = QString::asprintf("PlayerMoney: P=%d G=%d S=%d C=%d",
-		 player->profile.platinum, player->profile.gold, 
-		 player->profile.silver, player->profile.copper);
+                              player->platinum, player->gold,
+                              player->silver, player->copper);
   m_messages->addMessage(MT_Player, message);
-  
+
   message = QString::asprintf("BankMoney: P=%d G=%d S=%d C=%d",
-		  player->platinum_bank, player->gold_bank, 
-		  player->silver_bank, player->copper_bank);
+                              player->platinum_bank, player->gold_bank,
+                              player->silver_bank, player->copper_bank);
   m_messages->addMessage(MT_Player, message);
 
   message = QString::asprintf("CursorMoney: P=%d G=%d S=%d C=%d",
-		  player->profile.platinum_cursor, player->profile.gold_cursor, 
-		  player->profile.silver_cursor, player->profile.copper_cursor);
+                              player->platinum_cursor, player->gold_cursor,
+                              player->silver_cursor, player->copper_cursor);
   m_messages->addMessage(MT_Player, message);
 
-  message = QString::asprintf("SharedMoney: P=%d",
-		  player->platinum_shared);
+  message = "ExpAA: " + Commanate(player->expAA) +
+            " (aapoints: " + Commanate(player->aapoints) + ")";
   m_messages->addMessage(MT_Player, message);
-
-  message = QString::asprintf("DoN Crystals: Radiant=%d Ebon=%d",
-          player->currentRadCrystals, player->currentEbonCrystals);
-  m_messages->addMessage(MT_Player, message);
-
-// charProfileStruct.exp hasn't been found
-//   message = "Exp: " + Commanate(player->exp);
-//   m_messages->addMessage(MT_Player, message);
-
-  message = "ExpAA: (spent: " + Commanate(player->profile.aa_spent) + 
-      ", unspent: " + Commanate(player->profile.aa_unspent) + ")";
-  m_messages->addMessage(MT_Player, message);
-
-#if 0 
-  // Format for the aa values used to 0-1000 for group, 0-2000 for raid,
-  // but now it's different. Just drop it for now. %%%
-  message = "GroupLeadAA: " + Commanate(player->expGroupLeadAA) + 
-      " (unspent: " + Commanate(player->groupLeadAAUnspent) + ")";
-  m_messages->addMessage(MT_Player, message);
-  message = "RaidLeadAA: " + Commanate(player->expRaidLeadAA) + 
-      " (unspent: " + Commanate(player->raidLeadAAUnspent) + ")";
-  m_messages->addMessage(MT_Player, message);
-#endif
-
-// 09/03/2008 patch - this is no longer sent in charProfile
-//   message.sprintf("Group: %s %s %s %s %s %s", player->groupMembers[0],
-//     player->groupMembers[1],
-//     player->groupMembers[2],
-//     player->groupMembers[3],
-//     player->groupMembers[4],
-//     player->groupMembers[5]);
-//   m_messages->addMessage(MT_Player, message);
 
   int buffnumber;
   QString spellName;
 
-  for (buffnumber=0;buffnumber<MAX_BUFFS;buffnumber++)
+  for (buffnumber = 0; buffnumber < MAX_BUFFS; buffnumber++)
   {
-    if (player->profile.buffs[buffnumber].spellid && 
-            player->profile.buffs[buffnumber].duration)
+    if (player->buffs[buffnumber].spellid &&
+        player->buffs[buffnumber].duration)
     {
-      const Spell* spell = m_spells->spell(player->profile.buffs[buffnumber].spellid);
-      if(spell)
-         spellName = spell->name();
-      else
-         spellName = spell_name(player->profile.buffs[buffnumber].spellid);
+      const Spell* spell = m_spells->spell(player->buffs[buffnumber].spellid);
+      spellName = spell ? spell->name()
+                        : spell_name(player->buffs[buffnumber].spellid);
 
-      if(player->profile.buffs[buffnumber].duration == -1)
-        message = QString::asprintf("You have buff %s (permanent).", spellName.toLatin1().data());
-      else
-        message = QString::asprintf("You have buff %s duration left is %d in ticks.",
-                spellName.toLatin1().data(), player->profile.buffs[buffnumber].duration);
-
+      message = QString::asprintf("You have buff %s duration left is %d ticks.",
+                                  spellName.toLatin1().data(),
+                                  player->buffs[buffnumber].duration);
       m_messages->addMessage(MT_Player, message);
     }
   }
-
-  message = "LDoN Earned Guk Points: " + Commanate(player->ldon_guk_points);
-  m_messages->addMessage(MT_Player, message);
-  message = "LDoN Earned Mira Points: " + Commanate(player->ldon_mir_points);
-  m_messages->addMessage(MT_Player, message);
-  message = "LDoN Earned MMC Points: " + Commanate(player->ldon_mmc_points);
-  m_messages->addMessage(MT_Player, message);
-  message = "LDoN Earned Ruj Points: " + Commanate(player->ldon_ruj_points);
-  m_messages->addMessage(MT_Player, message);
-  message = "LDoN Earned Tak Points: " + Commanate(player->ldon_tak_points);
-  m_messages->addMessage(MT_Player, message);
-  message = "LDoN Unspent Points: " + Commanate(player->ldon_avail_points);
-  m_messages->addMessage(MT_Player, message);
 }
 
 void MessageShell::increaseSkill(const uint8_t* data)
