@@ -206,16 +206,16 @@
     
     
     <opcode id="1e40" name="OP_EnvDamage" updated="04/28/26">
-        <comment>Environmental Damage</comment>
-        <payload dir="client" typename="environmentDamageStruct" sizechecktype="match"/>
+        <comment>Environmental Damage (drowning, falling). Daemon does not consume this; struct unported.</comment>
+        <payload dir="client" sizechecktype="none"/>
     </opcode>
     <opcode id="1f40" name="OP_SetRunMode" updated="04/28/26">
-        <comment>old cRunToggleCode</comment>
-        <payload dir="client" typename="cRunToggleStruct" sizechecktype="match"/>
+        <comment>old cRunToggleCode. Daemon does not consume this; struct unported.</comment>
+        <payload dir="client" sizechecktype="none"/>
     </opcode>
     <opcode id="1242" name="OP_Trader" updated="07/19/23">
-        <comment>PC's turning trader on and off</comment>
-        <payload dir="server" typename="bazaarTraderRequest" sizechecktype="match"/>
+        <comment>PC's turning trader on and off. Daemon does not consume bazaar traffic.</comment>
+        <payload dir="server" sizechecktype="none"/>
     </opcode>
     <opcode id="6442" name="OP_ItemLinkResponse" updated="04/28/26">
         <comment>ItemInfoCode</comment>

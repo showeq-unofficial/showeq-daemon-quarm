@@ -222,12 +222,20 @@ void ZoneMgr::zonePlayer(const uint8_t* data, size_t len)
 
   fillProfileStruct(player,data,len,false); // don't bother checking the length since it's always going to not match up
 
-  m_shortZoneName = zoneNameFromID(player->zoneId);
+  const QString newShortName = zoneNameFromID(player->zoneId);
+  const bool zoneChanged = (newShortName != m_shortZoneName) || m_zoning;
+
+  m_shortZoneName = newShortName;
   m_longZoneName = zoneLongNameFromID(player->zoneId);
   m_zone_exp_multiplier = defaultZoneExperienceMultiplier;
   m_zoning = false;
 
-  emit zoneBegin(m_shortZoneName);
+  // EQ Mac/Quarm resends OP_PlayerProfile periodically (stat sync) without
+  // a real zone transition. Only re-emit zoneBegin when the zone actually
+  // changed or we were mid-zone, otherwise downstream slots like
+  // loadZoneMap reload the SOE map every refresh.
+  if (zoneChanged)
+    emit zoneBegin(m_shortZoneName);
   emit playerProfile(player);
 
   if (showeq_params->saveZoneState)
