@@ -1849,13 +1849,14 @@ struct wearChangeStruct
 ** OpCode: LevelUpUpdateCode
 */
 
+// EQ Mac OP_LevelUpdate — 12 bytes. From
+// EQMacEmu/common/eq_packet_structs.h::LevelUpdate_Struct.
 struct levelUpUpdateStruct
 {
 /*0000*/ uint32_t level;                         // New level
 /*0004*/ uint32_t levelOld;                      // Old level
 /*0008*/ uint32_t exp;                           // Current Experience
-/*0012*/ uint32_t  unknown0012;                  // unknown
-/*0016*/
+/*0012*/
 };
 
 /*

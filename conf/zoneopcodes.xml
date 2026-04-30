@@ -229,9 +229,9 @@
     <!-- Not necessary for SEQ to run but here to name packets in logs. -->
     
     
-    <opcode id="5041" name="OP_Logout" updated="04/28/26">
-        <comment></comment>
-        <payload dir="server" typename="uint8_t" sizechecktype="match"/>
+    <opcode id="5041" name="OP_Logout" updated="04/30/26">
+        <comment>Server-broadcast logout signal — empty body.</comment>
+        <payload dir="server" typename="uint8_t" sizechecktype="none"/>
     </opcode>
     
     

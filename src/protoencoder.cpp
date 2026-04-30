@@ -230,8 +230,11 @@ void fillPlayerStats(seq::v1::PlayerStats* out, const Player& p)
     const uint16_t calcManaMax = mp.getMaxMana();
     out->set_mana_cur(curMana);
     out->set_mana_max(curMana > calcManaMax ? curMana : calcManaMax);
-    out->set_stamina_cur(100u - mp.getFatigue());
-    out->set_stamina_max(100u);
+    // EQ Mac surfaces the run/jump exhaustion bar as `fatigue` (0..100)
+    // inside Stamina_Struct. Upstream proto labels this "endurance" (the
+    // bar's in-game name); we publish 100 - fatigue so 100 = full energy.
+    out->set_endurance_cur(100u - mp.getFatigue());
+    out->set_endurance_max(100u);
 
     out->set_level(mp.level());
     out->set_exp_cur(mp.getCurrentExp());

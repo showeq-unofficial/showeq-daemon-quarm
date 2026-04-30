@@ -638,6 +638,10 @@ void Player::updateStamina(const uint8_t* data)
   const staminaStruct *stam = (const staminaStruct *)data;
   m_food = stam->food;
   m_water = stam->water;
+  // EQ Mac: fatigue is the run/jump/swim exhaustion counter (0..100).
+  // Upstream surfaces this as "endurance" (100 - fatigue) in the
+  // PlayerStats wire message.
+  m_fatigue = stam->fatigue;
   m_validStam = true;
 
   emit stamChanged(m_food, 127, m_water, 127);
