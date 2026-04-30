@@ -1576,21 +1576,26 @@ struct remDropStruct
 };
 
 /*
-** Consider Struct
-** Length: 28 Octets
+** EQ Mac Consider_Struct (24 bytes).
+** Player/target ids are u16 here — not u32 as in post-EQMac. The
+** trailing post-EQMac unknown trio is replaced by Mac's actual
+** cur_hp/max_hp/pvpcon fields. `level` is the con-color code
+** (0=even, 1=grey, 2=green, ...), not the target's numeric level —
+** see consMessage() in messageshell.cpp.
 ** OpCode: considerCode
 */
 
 struct considerStruct
 {
-/*0000*/ uint32_t playerid;                      // PlayerID
-/*0004*/ uint32_t targetid;                      // TargetID
-/*0008*/ int32_t  faction;                       // Faction
-/*0012*/ int32_t  level;                         // Level
-/*0016*/ int32_t  unknown0016;                   // unknown
-/*0020*/ int32_t  unknown0020;                   // unknown (rarity?)
-/*0024*/ int32_t  unknown0024;                   // unknown
-/*0028*/
+/*0000*/ uint16_t playerid;                      // PlayerID
+/*0002*/ uint16_t targetid;                      // TargetID
+/*0004*/ uint32_t faction;                       // Faction
+/*0008*/ uint32_t level;                         // Con-color code
+/*0012*/ int32_t  cur_hp;                        // Current HP
+/*0016*/ int32_t  max_hp;                        // Max HP
+/*0020*/ uint8_t  pvpcon;                        // PvP con flag
+/*0021*/ uint8_t  unknown0021[3];
+/*0024*/
 };
 
 /*
