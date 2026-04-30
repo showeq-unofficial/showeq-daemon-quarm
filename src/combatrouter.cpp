@@ -31,3 +31,47 @@ static QString lookupSpawnName(SpawnShell* shell, uint16_t id)
     return it->name();
 }
 
+static QString lookupSpellName(Spells* spells, uint16_t spellId)
+{
+    if (!spells || spellId == 0 || spellId == 0xffff) return QString();
+    if (const Spell* s = spells->spell(spellId)) return s->name();
+    return QString();
+}
+
+void CombatRouter::action(const uint8_t* data, size_t len, uint8_t /*dir*/)
+{
+    if (!data || len < sizeof(actionStruct)) return;
+    const auto* a = reinterpret_cast<const actionStruct*>(data);
+
+    const uint16_t spellId = a->spell;
+    const QString sourceName = lookupSpawnName(m_spawnShell, a->source);
+    const QString targetName = lookupSpawnName(m_spawnShell, a->target);
+    const QString spellName  = lookupSpellName(m_spells, spellId);
+
+    // OP_Action announces the cast — no damage value attached. The
+    // matching OP_Damage carries the int32 damage amount.
+    emit combatEvent(a->source, sourceName,
+                     a->target, targetName,
+                     static_cast<uint32_t>(a->type),
+                     0,
+                     static_cast<uint32_t>(spellId),
+                     spellName);
+}
+
+void CombatRouter::damage(const uint8_t* data, size_t len, uint8_t /*dir*/)
+{
+    if (!data || len < sizeof(damageStruct)) return;
+    const auto* d = reinterpret_cast<const damageStruct*>(data);
+
+    const uint16_t spellId = d->spellid;
+    const QString sourceName = lookupSpawnName(m_spawnShell, d->source);
+    const QString targetName = lookupSpawnName(m_spawnShell, d->target);
+    const QString spellName  = lookupSpellName(m_spells, spellId);
+
+    emit combatEvent(d->source, sourceName,
+                     d->target, targetName,
+                     static_cast<uint32_t>(d->type),
+                     d->damage,
+                     static_cast<uint32_t>(spellId),
+                     spellName);
+}

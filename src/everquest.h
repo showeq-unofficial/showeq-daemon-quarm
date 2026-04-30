@@ -1702,20 +1702,20 @@ struct actionStruct
 /*0036*/
 };
 
-// Starting with 2/21/2006, OP_Actions seem to come in pairs, duplicating
-// themselves, with the second one with slightly more information. Maybe this
-// has to do with buff blocking??
-struct actionAltStruct
+// EQ Mac OP_Damage — 24 bytes. From eq_packet_structs.h::Damage_Struct.
+// Carries the actual damage amount; melee swings, dots, environmental,
+// etc. all flow through this opcode after OP_Action announces the cast.
+struct damageStruct
 {
-/*0000*/ uint16_t target;                        // Target ID
-/*0002*/ uint16_t source;                        // SourceID
-/*0004*/ int16_t  spell;                         // SpellID
-/*0006*/ uint8_t  unknown0006[6];
-/*0012*/ uint8_t  level;                         // Caster level
-/*0013*/ uint8_t  unknown0013[43];               // ***Placeholder
-/*0056*/ uint8_t  type;                          // Casts, Falls, Bashes, etc...
-/*0057*/ uint8_t  unknown0057[31];
-/*0088*/
+/*0000*/ uint16_t target;
+/*0002*/ uint16_t source;
+/*0004*/ uint16_t type;                          // damage type (skill id / spell category)
+/*0006*/ uint16_t spellid;
+/*0008*/ int32_t  damage;                        // negative = heal
+/*0012*/ float    force;
+/*0016*/ float    sequence;
+/*0020*/ float    pushup_angle;
+/*0024*/
 };
 
 /*

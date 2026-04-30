@@ -8,17 +8,26 @@
 class SpawnShell;
 class Spells;
 
-// Combat event emitter for the websocket layer. Originally fed by
-// OP_Action2 (post-EQMac). On EQ Mac the equivalent signal would come
-// from OP_Action (different struct shape), which has not been re-wired
-// yet — the class is kept as a dormant signal source so SessionAdapter
-// stays compilable. No slot is currently registered; combatEvent never
-// fires until a Mac-shaped action parser lands.
+// Routes EQ Mac OP_Action (spell-cast announcement) and OP_Damage
+// (actual damage event) into structured combatEvent signals consumed
+// by SessionAdapter and forwarded to the web client. Sits at the
+// daemon level (one instance), so the spawn-id → name and
+// spell-id → spell-name lookups happen once per packet rather than
+// once per connected client.
 class CombatRouter : public QObject {
     Q_OBJECT
 public:
     CombatRouter(SpawnShell* spawnShell, Spells* spells,
                  QObject* parent = nullptr);
+
+public slots:
+    // Wired to OP_Action by DaemonApp. Mac actionStruct (36 bytes) — the
+    // cast/animation announcement. damage is always 0; spellId may be set.
+    void action(const uint8_t* data, size_t len, uint8_t dir);
+
+    // Wired to OP_Damage by DaemonApp. Mac damageStruct (24 bytes) — the
+    // actual damage delivery (or heal, signalled by negative `damage`).
+    void damage(const uint8_t* data, size_t len, uint8_t dir);
 
 signals:
     void combatEvent(uint32_t sourceId, const QString& sourceName,

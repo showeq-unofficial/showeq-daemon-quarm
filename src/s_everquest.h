@@ -65,7 +65,7 @@ AddStruct(newCorpseStruct);
 AddStruct(moneyOnCorpseStruct);
 AddStruct(staminaStruct);
 AddStruct(actionStruct);
-AddStruct(actionAltStruct);
+AddStruct(damageStruct);
 AddStruct(clientTargetStruct);
 AddStruct(startCastStruct);
 AddStruct(manaDecrementStruct);

@@ -589,10 +589,19 @@ void DaemonApp::wireSpawnShell()
                        "actionStruct", SZC_Match,
                        m_spellShell,
                        SLOT(action(const uint8_t*, size_t, uint8_t)));
+
+    // CombatRouter parses OP_Action (spell-cast announcement) and
+    // OP_Damage (actual damage event) into structured combatEvents
+    // forwarded to the websocket layer. Distinct from SpellShell's
+    // buff/cast bookkeeping above.
     m_packet->connect2("OP_Action", SP_Zone, DIR_Server|DIR_Client,
-                       "actionAltStruct", SZC_Match,
-                       m_spellShell,
+                       "actionStruct", SZC_Match,
+                       m_combatRouter,
                        SLOT(action(const uint8_t*, size_t, uint8_t)));
+    m_packet->connect2("OP_Damage", SP_Zone, DIR_Server|DIR_Client,
+                       "damageStruct", SZC_Match,
+                       m_combatRouter,
+                       SLOT(damage(const uint8_t*, size_t, uint8_t)));
 }
 
 static QStringList mapSearchPaths(const QString& override,

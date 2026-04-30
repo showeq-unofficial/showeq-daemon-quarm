@@ -79,10 +79,13 @@
         <comment>Items dropped on the ground</comment>
         <payload dir="both" typename="remDropStruct" sizechecktype="match"/>
     </opcode>
-    <opcode id="4640" name="OP_Action" updated="04/28/26">
-        <comment>Spells cast etc</comment>
+    <opcode id="4640" name="OP_Action" updated="04/30/26">
+        <comment>Spell-cast / animation announcement (no damage value)</comment>
         <payload dir="both" typename="actionStruct" sizechecktype="match"/>
-        <payload dir="both" typename="actionAltStruct" sizechecktype="match"/>
+    </opcode>
+    <opcode id="5840" name="OP_Damage" updated="04/30/26">
+        <comment>Damage event (melee swing / spell tick / fall / etc.)</comment>
+        <payload dir="both" typename="damageStruct" sizechecktype="match"/>
     </opcode>
 <opcode id="3741" name="OP_Consider" updated="04/28/26">
         <comment>ConsiderCode</comment>

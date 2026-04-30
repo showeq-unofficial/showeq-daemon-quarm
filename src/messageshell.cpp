@@ -264,10 +264,16 @@ void MessageShell::formattedMessage(const uint8_t* data, size_t len, uint8_t dir
   if (dir == DIR_Client)
     return;
 
+  // EQ Mac OP_FormattedMessage wire is 12-40 bytes per opcode-stats. The
+  // 12-byte case is just the header (no message body); guard against
+  // size_t underflow in the messagesLen subtraction below.
+  const size_t kHeaderLen = offsetof(formattedMessageStruct, messages);
+  if (len < kHeaderLen) return;
+
   const formattedMessageStruct* fmsg = (const formattedMessageStruct*)data;
   QString tempStr;
 
-  size_t messagesLen = len - ((uint8_t*)&fmsg->messages[0] - (uint8_t*)fmsg);
+  const size_t messagesLen = len - kHeaderLen;
   const MessageType mt = chatColor2MessageType(fmsg->messageColor);
   const QString text = stripEqItemLinks(
       m_eqStrings->formatMessage(fmsg->messageFormat,
