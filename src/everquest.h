@@ -1564,14 +1564,15 @@ struct deleteSpawnStruct
 ** OpCode: RemDropCode
 */
 
+// EQ Mac OP_ClickObject body — 8 bytes. From
+// EQMacEmu/common/eq_packet_structs.h::ClickObject_Struct.
+// Legacy showeq field names preserved (`dropId` for drop_id, `spawnId`
+// for player_id) so the SpawnShell slot compiles unchanged.
 struct remDropStruct
 {
-/*0000*/ uint16_t dropId;                        // ID assigned to drop
-/*0002*/ uint8_t  unknown0002[2];                // ***Placeholder
-/*0004*/ uint16_t spawnId;                       // ID of player picking item up
-/*0006*/ uint8_t  unknown0006[2];                // ***Placeholder
-/*0008*/ uint8_t  unknown0008[4];                // added 8/21/2019
-/*0012*/
+/*0000*/ uint32_t dropId;                        // drop_id
+/*0004*/ uint32_t spawnId;                       // player_id (the actor)
+/*0008*/
 };
 
 /*
