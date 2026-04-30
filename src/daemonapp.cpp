@@ -272,21 +272,15 @@ bool DaemonApp::start()
     if (!shortZoneName.isEmpty()) {
         loadZoneMap(shortZoneName);
     }
-    // Camp+login takes the `zonePlayer -> emit zoneBegin` path; inter-zone
-    // transitions take the `zoneChange(DIR_Server) -> emit zoneChanged`
-    // path. Listen to both — loadZoneMap is idempotent if the zone hasn't
-    // changed because clear()+reload yields the same MapData.
+    // zoneBegin alone covers both paths: camp/login goes
+    // zonePlayer -> zoneBegin; inter-zone goes zoneChange -> zoneChanged
+    // -> (server resends profile) -> zonePlayer -> zoneBegin (gated by
+    // ZoneMgr's m_zoning flag). Wiring both signals here loaded the map
+    // twice on every transition.
     connect(m_zoneMgr, SIGNAL(zoneBegin(const QString&)),
             this,      SLOT(loadZoneMap(const QString&)));
-    connect(m_zoneMgr, SIGNAL(zoneChanged(const QString&)),
-            this,      SLOT(loadZoneMap(const QString&)));
 
-    // Same dual-signal wiring for the per-zone filter overlay. Without
-    // this, FilterMgr::loadZone only fires once at startup and the
-    // overlay file for the new zone is never re-read on transitions.
     connect(m_zoneMgr,   SIGNAL(zoneBegin(const QString&)),
-            m_filterMgr, SLOT(loadZone(const QString&)));
-    connect(m_zoneMgr,   SIGNAL(zoneChanged(const QString&)),
             m_filterMgr, SLOT(loadZone(const QString&)));
 
     // Let the WebSocket server hand these to each SessionAdapter it spawns.
