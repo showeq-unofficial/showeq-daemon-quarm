@@ -314,9 +314,9 @@
         <comment>One side clicks Accept on the trade 8 bytes</comment>
         <payload dir="both" typename="uint8_t" sizechecktype="none"/>
     </opcode>
-<opcode id="4e40" name="OP_LootRequest" updated="04/28/26">
-        <comment>LootCorpseCode - 4 bytes</comment>
-        <payload dir="client" typename="uint8_t" sizechecktype="none"/>
+    <opcode id="4e40" name="OP_LootRequest" updated="04/30/26">
+        <comment>LootCorpseCode — 2 bytes target spawnId on EQ Mac. Both directions seen on wire (client request / server ack).</comment>
+        <payload dir="both" typename="uint8_t" sizechecktype="none"/>
     </opcode>
     <opcode id="a040" name="OP_LootItem" updated="04/28/26">
         <comment>Loot item from corpse - 20 bytes</comment>
