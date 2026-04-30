@@ -2048,19 +2048,24 @@ struct tradeSpellBookSlotsStruct
 ** 
 */
 
+// EQ Mac OP_Buff body — 20 bytes. From
+// EQMacEmu/common/eq_packet_structs.h::SpellBuffFade_Struct.
+// Field names follow the showeq legacy where slots reference them
+// (spawnid, spellid, spellslot, changetype).
 struct buffStruct
 {
-/*0000*/ uint32_t spawnid;                       //spawn id
-/*0004*/ uint8_t  unknown0004[112]; 
-/*0116*/ uint32_t spellid;                       // spellid
-/*0120*/ uint32_t duration;                      // Time remaining in ticks
-/*0124*/ int32_t unknown0024;                    // Buff length in ticks
-/*0128*/ uint8_t  unknown0080[25];
-/*0153*/ int8_t   level;                         // Level of person who cast buff
-/*0154*/ uint8_t  unknown0106[6];
-/*0160*/ uint32_t spellslot;                     // buff slot in buff window
-/*0164*/ uint32_t changetype;                    // 1=buff fading,2=buff duration
-/*0168*/ 
+/*0000*/ uint16_t spawnid;                       // entityid
+/*0002*/ uint8_t  bufftype;
+/*0003*/ uint8_t  level;                         // caster level
+/*0004*/ uint8_t  bard_modifier;
+/*0005*/ uint8_t  activated;
+/*0006*/ uint16_t spellid;
+/*0008*/ uint16_t duration;                      // ticks remaining
+/*0010*/ uint16_t counters;                      // poison/disease/curse counter or rune amount
+/*0012*/ uint16_t spellslot;                     // slot_number (buff window slot)
+/*0014*/ uint16_t unk14;
+/*0016*/ uint32_t changetype;                    // bufffade: 1=remove, 3=replace, else=update
+/*0020*/
 };
 
 /*
