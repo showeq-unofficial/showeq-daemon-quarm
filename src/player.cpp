@@ -21,6 +21,7 @@
  */
 
 #include "player.h"
+#include "checkpoint.h"
 #include "util.h"
 #include "packetcommon.h"
 #include "diagnosticmessages.h"
@@ -766,6 +767,37 @@ void Player::setPlayerID(uint16_t playerID)
      updateLastChanged();
      emit changeItem(this, tSpawnChangedALL);
   }
+}
+
+void Player::applyCheckpoint(const CheckpointData& cp)
+{
+  setName(cp.player_name);
+  setLastName(cp.player_last_name);
+  setLevel(cp.player_level);
+  setClassVal(cp.player_class);
+  setRace(cp.player_race);
+  setDeity(cp.player_deity);
+  setGender(cp.player_gender);
+
+  m_currentExp    = cp.current_exp;
+  m_maxExp        = cp.max_exp;
+  m_currentAltExp = cp.current_alt_exp;
+  m_currentAApts  = cp.current_aa_pts;
+
+  // setPlayerID emits changedID + changeItem; only fires when the id
+  // actually changed, so a no-op restore (same id as a default-zero
+  // init) stays silent.
+  setPlayerID(cp.player_id);
+
+  // Tell downstream observers (SessionAdapter, web UI) that the
+  // identity is suddenly live again so they don't sit on stale
+  // "unknown" until the next OP_PlayerProfile arrives.
+  emit newPlayer();
+  emit levelChanged(level());
+
+  seqInfo("Restored player from checkpoint: %s (lvl %d, id %u) in zone '%s'",
+          name().toLatin1().data(), level(), id(),
+          cp.short_zone_name.toLatin1().data());
 }
 
 bool Player::getStatValue(uint8_t stat,

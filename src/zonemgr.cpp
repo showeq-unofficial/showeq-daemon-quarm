@@ -134,6 +134,20 @@ const zonePointStruct* ZoneMgr::zonePoint(uint32_t zoneTrigger)
   return 0;
 }
 
+void ZoneMgr::applyCheckpoint(const QString& shortName, const QString& longName)
+{
+  if (shortName.isEmpty()) return;
+
+  m_shortZoneName = shortName;
+  m_longZoneName  = longName;
+  m_zoning        = false;
+
+  seqInfo("Restored zone from checkpoint: %s (%s)",
+          shortName.toLatin1().data(), longName.toLatin1().data());
+
+  emit zoneBegin(m_shortZoneName);
+}
+
 void ZoneMgr::saveZoneState(void)
 {
   QFile keyFile(showeq_params->saveRestoreBaseFilename + "Zone.dat");

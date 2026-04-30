@@ -171,6 +171,7 @@ set(SEQ_DAEMON_EXTRACTED_SOURCES
 )
 
 set(SEQ_DAEMON_CORE_NEW_SOURCES
+  src/checkpoint.cpp
   src/protoencoder.cpp
   src/combatrouter.cpp
   src/filesink.cpp

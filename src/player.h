@@ -97,6 +97,12 @@ public:
    void restorePlayerState(void);
    void setUseDefaults(bool bdefaults) { m_useDefaults = bdefaults; }
 
+   // Restore the slow-moving identity fields captured by Checkpoint
+   // (name / level / class / race / deity / id / exp). Volatile state
+   // — HP, mana, position, buffs — is left untouched and refills from
+   // the next OP_PlayerProfile.
+   void applyCheckpoint(const struct CheckpointData& cp);
+
  public:
    virtual QString name() const;
    virtual QString lastName() const;

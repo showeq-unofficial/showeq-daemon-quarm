@@ -63,6 +63,12 @@ class ZoneMgr : public QObject
   void saveZoneState(void);
   void restoreZoneState(void);
 
+  // Seed the zone identity from a Checkpoint. Emits zoneBegin so
+  // downstream slots (loadZoneMap, filterMgr->loadZone) wire up the
+  // map + filter for the restored zone immediately, instead of
+  // waiting for the next OP_PlayerProfile or zoneChange to arrive.
+  void applyCheckpoint(const QString& shortName, const QString& longName);
+
  protected slots:
   void zoneEntryClient(const uint8_t* zsentry, size_t, uint8_t);
   void zonePlayer(const uint8_t* zsentry, size_t len);

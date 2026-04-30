@@ -10,6 +10,7 @@
 #include "main.h"
 
 #include "category.h"
+#include "checkpoint.h"
 #include "combatrouter.h"
 #include "datalocationmgr.h"
 #include "datetimemgr.h"
@@ -209,6 +210,19 @@ bool DaemonApp::start()
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
             m_spawnMonitor, &SpawnMonitor::saveSpawnPoints);
 
+    // Identity checkpoint: write player + zone identity to disk on
+    // graceful shutdown and every 5 minutes so a daemon restart can
+    // re-seed the web UI without waiting for the next periodic
+    // OP_PlayerProfile (~60s on Quarm). Volatile state (spawns, buffs,
+    // group) is intentionally not persisted; it refills from the wire.
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
+            this, &DaemonApp::saveCheckpoint);
+    m_checkpointTimer = new QTimer(this);
+    m_checkpointTimer->setInterval(5 * 60 * 1000);
+    connect(m_checkpointTimer, &QTimer::timeout,
+            this, &DaemonApp::saveCheckpoint);
+    m_checkpointTimer->start();
+
     // GroupMgr tracks group members. Wiring matches showeq/src/
     // interface.cpp:593-615 — needs the player profile signal, three
     // group opcode handlers, and the spawn lifecycle slots.
@@ -350,6 +364,12 @@ bool DaemonApp::start()
     } else {
         qInfo("no --device or --replay — capture pipeline idle");
     }
+
+    // All signal wiring is in place above; safe to apply the
+    // checkpoint now so applyCheckpoint's zoneBegin reaches
+    // loadZoneMap, filterMgr::loadZone, and SessionAdapter.
+    restoreCheckpoint();
+
     return true;
 }
 
@@ -676,4 +696,52 @@ void DaemonApp::loadZoneMap(const QString& shortZoneName)
     qInfo("loaded map for zone '%s' (%d layer(s) from %s)",
           qUtf8Printable(shortZoneName), files.size(),
           qUtf8Printable(QFileInfo(files.first()).absolutePath()));
+}
+
+namespace {
+constexpr qint64 kCheckpointMaxAgeSeconds = 30 * 60;  // 30 min stale fence
+}
+
+void DaemonApp::saveCheckpoint()
+{
+    if (!m_player || !m_zoneMgr || !m_dataLocationMgr) return;
+
+    // Only persist a real identity. id() is 0 until the first
+    // OP_PlayerProfile / OP_NewSpawn. Writing zero-id data would
+    // overwrite a usable previous snapshot with empty fields after a
+    // daemon restart that hasn't seen a profile yet.
+    if (m_player->id() == 0 || m_player->name().isEmpty()) return;
+
+    CheckpointData data;
+    data.player_id        = m_player->id();
+    data.player_name      = m_player->name();
+    data.player_last_name = m_player->lastName();
+    data.player_class     = m_player->classVal();
+    data.player_level     = static_cast<uint8_t>(m_player->level());
+    data.player_race      = m_player->race();
+    data.player_deity     = m_player->deity();
+    data.player_gender    = m_player->gender();
+    data.current_exp      = m_player->getCurrentExp();
+    data.max_exp          = m_player->getMaxExp();
+    data.current_alt_exp  = m_player->getCurrentAltExp();
+    data.current_aa_pts   = m_player->getCurrentAApts();
+    data.short_zone_name  = m_zoneMgr->shortZoneName();
+    data.long_zone_name   = m_zoneMgr->longZoneName();
+
+    const QFileInfo fi = m_dataLocationMgr->findWriteFile(
+        "daemon", "checkpoint.json", true, true);
+    Checkpoint::save(fi, std::move(data));
+}
+
+void DaemonApp::restoreCheckpoint()
+{
+    if (!m_player || !m_zoneMgr || !m_dataLocationMgr) return;
+
+    const QFileInfo fi = m_dataLocationMgr->findWriteFile(
+        "daemon", "checkpoint.json", true, false);
+    auto cp = Checkpoint::load(fi, kCheckpointMaxAgeSeconds);
+    if (!cp) return;
+
+    m_player->applyCheckpoint(*cp);
+    m_zoneMgr->applyCheckpoint(cp->short_zone_name, cp->long_zone_name);
 }

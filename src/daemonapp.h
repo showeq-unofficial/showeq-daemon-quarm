@@ -95,11 +95,17 @@ private slots:
     // ZoneMgr::zoneChanged so SessionAdapter has fresh geometry to stream.
     void loadZoneMap(const QString& shortZoneName);
 
+    // Snapshot identity (player + zone) to ~/.showeq/daemon/checkpoint.json.
+    // Wired to aboutToQuit and a periodic timer so a daemon restart can
+    // re-seed the web UI without waiting for the next OP_PlayerProfile.
+    void saveCheckpoint();
+
 private:
     bool startServer();
     bool startCapture();
     void wireZoneMgr();
     void wireSpawnShell();
+    void restoreCheckpoint();
 
     Config                          m_cfg;
 
@@ -134,4 +140,8 @@ private:
     // Set when --opcode-stats is passed. Parented to `this` so the
     // dtor's writeReport() runs as part of normal Qt teardown.
     OpcodeStatsLogger*              m_opcodeStats    = nullptr;
+
+    // Periodic identity-snapshot timer; a manual saveCheckpoint() also
+    // runs from aboutToQuit (see start()). Owned via Qt parent.
+    class QTimer*                   m_checkpointTimer = nullptr;
 };
