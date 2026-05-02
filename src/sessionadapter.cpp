@@ -286,10 +286,12 @@ void SessionAdapter::startStreaming()
     if (m_messageShell) {
         connect(m_messageShell,
                 SIGNAL(chatMessage(uint32_t, const QString&,
-                                   const QString&, const QString&)),
+                                   const QString&, const QString&,
+                                   uint32_t)),
                 this,
                 SLOT(onChatMessage(uint32_t, const QString&,
-                                   const QString&, const QString&)));
+                                   const QString&, const QString&,
+                                   uint32_t)));
     }
 
     if (m_groupMgr) {
@@ -651,7 +653,8 @@ void SessionAdapter::onPlayerIdChanged()
 }
 
 void SessionAdapter::onChatMessage(uint32_t channel, const QString& from,
-                                   const QString& target, const QString& text)
+                                   const QString& target, const QString& text,
+                                   uint32_t chatColor)
 {
     seq::v1::Envelope env;
     auto* chat = env.mutable_chat();
@@ -659,6 +662,7 @@ void SessionAdapter::onChatMessage(uint32_t channel, const QString& from,
     chat->set_from(from.toStdString());
     chat->set_target(target.toStdString());
     chat->set_text(text.toStdString());
+    chat->set_chat_color(chatColor);
     sendOrBuffer(std::move(env));
 }
 

@@ -137,10 +137,13 @@ void MessageShell::channelMessage(const uint8_t* data, size_t len, uint8_t dir)
   case MT_Tell:
   case MT_Say:
   case MT_Raid:
+    // OP_ChannelMessage has no wire ChatColor — pass 0 (CC_Default) so
+    // the client falls back to the chanNum->colour mapping.
     emit chatMessage(static_cast<uint32_t>(cmsg->chanNum),
                      QString::fromLatin1(cmsg->sender),
                      QString::fromLatin1(cmsg->target),
-                     stripEqItemLinks(QString::fromLatin1(cmsg->message)));
+                     stripEqItemLinks(QString::fromLatin1(cmsg->message)),
+                     0u);
     break;
   default:
     break;
@@ -285,8 +288,11 @@ void MessageShell::formattedMessage(const uint8_t* data, size_t len, uint8_t dir
                                  messagesLen));
   m_messages->addMessage(mt, text);
   // Forward to the websocket as a system-flavored chatMessage so the web
-  // chat panel sees NPC speech, system warnings, exp ticks, etc.
-  emit chatMessage(static_cast<uint32_t>(mt), QString(), QString(), text);
+  // chat panel sees NPC speech, system warnings, exp ticks, etc. Pass
+  // the raw ChatColor through so the client can colour the line with
+  // full fidelity instead of falling back to the lossy MT collapse.
+  emit chatMessage(static_cast<uint32_t>(mt), QString(), QString(), text,
+                   static_cast<uint32_t>(fmsg->messageColor));
 }
 
 
@@ -312,7 +318,8 @@ void MessageShell::specialMessage(const uint8_t* data, size_t len, uint8_t dir)
       QString::fromLatin1(smsg->message, static_cast<int>(msgLen)));
 
   m_messages->addMessage(mt, QString("Special: %1").arg(text));
-  emit chatMessage(static_cast<uint32_t>(mt), QString(), QString(), text);
+  emit chatMessage(static_cast<uint32_t>(mt), QString(), QString(), text,
+                   static_cast<uint32_t>(smsg->messageColor));
 }
 
 void MessageShell::guildMOTD(const uint8_t* data, size_t, uint8_t dir)
