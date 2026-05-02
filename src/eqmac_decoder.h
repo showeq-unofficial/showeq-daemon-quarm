@@ -68,6 +68,13 @@ private:
   };
 
   std::unordered_map<uint16_t, FragmentGroup> m_fragments;
+
+  // High-water-mark dwARQ for retransmit dedup. The EQOldStream wire
+  // re-sends the same application message (same dwARQ) on every dwSEQ
+  // until ack'd; without this the daemon dispatches every retransmit
+  // as a fresh app event. Values are signed-difference compared to
+  // tolerate the 16-bit wrap. -1 == not yet seen.
+  int32_t m_lastArq = -1;
 };
 
 #endif // EQMAC_DECODER_H

@@ -118,6 +118,7 @@ EQMacDecoder::EQMacDecoder() = default;
 
 void EQMacDecoder::reset() {
   m_fragments.clear();
+  m_lastArq = -1;
 }
 
 // Wrapper that intercepts the obfuscated+compressed app opcodes and emits
@@ -198,9 +199,35 @@ void EQMacDecoder::process(const uint8_t* buf, size_t len,
   }
 
   // ---- dwARQ (a1_ARQ) ----
+  uint16_t dwARQ = 0;
+  bool haveARQ = false;
   if (a1_ARQ) {
     if (off + 2 > len) return;
+    dwARQ = readBE16(buf + off);
+    haveARQ = true;
     off += 2;
+  }
+
+  // Drop retransmits. EQOldStream re-sends the same application message
+  // (same dwARQ, fresh dwSEQ) until ack'd; without this the daemon
+  // dispatches each retransmit as a fresh app-packet, which manifests
+  // as e.g. OP_ZoneChange firing every ~450ms forever after a real zone
+  // transition. Strictly-monotonic check via signed 16-bit difference
+  // tolerates the natural 0xFFFF→0x0000 wrap (delta becomes a small
+  // positive after wrap, not a huge negative). On stream restart
+  // m_lastArq resets to -1, so the first ARQ packet always passes.
+  if (haveARQ) {
+    if (m_lastArq < 0) {
+      m_lastArq = dwARQ;
+    } else {
+      const int16_t delta =
+          static_cast<int16_t>(dwARQ - static_cast<uint16_t>(m_lastArq));
+      if (delta <= 0) {
+        // Already seen this ARQ (or older). Drop the retransmit.
+        return;
+      }
+      m_lastArq = dwARQ;
+    }
   }
 
   // ---- fraginfo (a3_Fragment) ----

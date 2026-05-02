@@ -28,6 +28,7 @@
 #include <QHash>
 #include <map>
 #include <memory>
+#include <unordered_map>
 
 #include "packetcommon.h"
 #include "packetfragment.h"
@@ -164,8 +165,15 @@ class EQPacketStream : public QObject
   int64_t m_decodeKey;
   bool m_validKey;
 
-  // EQMac (Quarm) wire decoder. Holds session/seq state per stream.
-  std::unique_ptr<EQMacDecoder> m_eqmacDecoder;
+  // EQMac (Quarm) wire decoders, one per (srcPort, dstPort) tuple. The
+  // host-wide BPF filter funnels packets from multiple logical UDP flows
+  // into the same EQPacketStream — different EQ zone servers (each uses
+  // its own port), plus stray non-EQ traffic to/from the host. Each flow
+  // is an independent EQOldStream session with its own dwSEQ/dwARQ space
+  // and retransmit window, so a single shared decoder would corrupt the
+  // ARQ-dedup state every time the flows interleave. Lazy-created on the
+  // first packet for a given tuple; reset() drops the whole map.
+  std::unordered_map<uint32_t, std::unique_ptr<EQMacDecoder>> m_decoders;
 };
 
 inline uint8_t EQPacketStream::sessionTracking()

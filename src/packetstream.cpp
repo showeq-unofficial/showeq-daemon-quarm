@@ -96,8 +96,7 @@ EQPacketStream::EQPacketStream(EQStreamID streamid, uint8_t dir,
     m_sessionClientIP(0),
     m_maxLength(0),
     m_decodeKey(0),
-    m_validKey(true),
-    m_eqmacDecoder(std::make_unique<EQMacDecoder>())
+    m_validKey(true)
 {
     setObjectName(name);
 }
@@ -195,7 +194,7 @@ void EQPacketStream::reset()
   m_sessionClientIP = 0;
   m_sessionId = 0;
   m_sessionKey = 0;
-  if (m_eqmacDecoder) m_eqmacDecoder->reset();
+  m_decoders.clear();
 }
 
 ////////////////////////////////////////////////////
@@ -543,6 +542,22 @@ void EQPacketStream::handlePacket(EQUDPIPPacketFormat& packet)
     return;
   }
 
+  // Each (srcPort, dstPort) is a logically independent EQOldStream session
+  // with its own dwSEQ/dwARQ space and retransmit window. The host-wide BPF
+  // filter funnels several flows into this stream (zone server A on one port,
+  // zone server B on another at a zone transition, plus any non-EQ UDP to/from
+  // the host), so we keep one decoder per tuple. Sharing a single decoder
+  // would corrupt the ARQ-dedup high-water-mark every time the flows
+  // interleave, causing retransmits to dispatch as fresh app events.
+  const uint16_t srcPort = packet.getSourcePort();
+  const uint16_t dstPort = packet.getDestPort();
+  const uint32_t tupleKey =
+      (static_cast<uint32_t>(srcPort) << 16) | static_cast<uint32_t>(dstPort);
+
+  auto& decoderSlot = m_decoders[tupleKey];
+  if (!decoderSlot)
+    decoderSlot = std::make_unique<EQMacDecoder>();
+
   // Run the UDP payload through the EQMac (Quarm) decoder. The post-EQMac
   // protocol-packet path that used to live here (CRC + EQProtocolPacket::decode
   // + processPacket recursion + ARQ cache) targets a different protocol
@@ -552,19 +567,11 @@ void EQPacketStream::handlePacket(EQUDPIPPacketFormat& packet)
   emit rawPacket(packet.getUDPPayload(), packet.getUDPPayloadLength(), m_dir,
                  packet.getNetOpCode());
 
-  m_eqmacDecoder->process(
+  decoderSlot->process(
       packet.getUDPPayload(), packet.getUDPPayloadLength(),
       [this](uint16_t opcode, const uint8_t* data, size_t len) {
         dispatchPacket(data, len, opcode, m_opcodeDB.find(opcode));
       });
-
-  // Pick up any session-level state the decoder learned from a SessionResponse
-  // we happened to witness. Mid-session join leaves these zero, which
-  // downstream code already tolerates.
-  if (m_eqmacDecoder->sessionEstablished())
-  {
-    m_sessionKey = m_eqmacDecoder->sessionKey();
-  }
 }
 
 /////////////////////////////////////////////////////
