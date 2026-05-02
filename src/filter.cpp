@@ -552,8 +552,9 @@ int Filter::getMaxLevel(int index) const
 
 //----------------------------------------------------------------------
 //  Filters
-Filters::Filters(const FilterTypes& types)
-  : m_types(types)
+Filters::Filters(const FilterTypes& types, bool caseSensitive)
+  : m_types(types),
+    m_caseSensitive(caseSensitive)
 {
 }
 

@@ -184,7 +184,15 @@ private:
 class Filters
 {
  public:
-  Filters(const FilterTypes& types);
+  // Default to case-insensitive matching — the only caller (FilterMgr)
+  // matches its own m_caseSensitive default and downstream FilterItems
+  // expect the bit set so case-insensitive zone rules
+  // ("Name:Bixie Queen") match haystacks that carry the transformed
+  // lowercase name ("Name:bixie queen, a:..."). Leaving the bool
+  // uninitialized produced a non-deterministic flag bit per process,
+  // so some replay runs randomly downgraded every loaded filter to
+  // case-sensitive and silently lost matches.
+  explicit Filters(const FilterTypes& types, bool caseSensitive = false);
   ~Filters();
   
   bool clear(void);

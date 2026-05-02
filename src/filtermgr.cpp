@@ -64,13 +64,13 @@ FilterMgr::FilterMgr(const DataLocationMgr* dataLocMgr,
   #undef X
 
   // create global filters object
-  m_filters = new Filters(*m_types);
+  m_filters = new Filters(*m_types, m_caseSensitive);
 
   // load the global filters
   loadFilters(filterFile);
 
   // create the zone filters object
-  m_zoneFilters = new Filters(*m_types);
+  m_zoneFilters = new Filters(*m_types, m_caseSensitive);
 
   // load the zone filters
   loadZone("unknown");
@@ -79,7 +79,7 @@ FilterMgr::FilterMgr(const DataLocationMgr* dataLocMgr,
   m_runtimeTypes = new FilterTypes;
 
   // create runtime filters object
-  m_runtimeFilters = new Filters(*m_runtimeTypes);
+  m_runtimeFilters = new Filters(*m_runtimeTypes, m_caseSensitive);
 }
 
 FilterMgr::~FilterMgr()

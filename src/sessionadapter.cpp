@@ -457,9 +457,15 @@ void SessionAdapter::sendSnapshot()
         all.push_back(m_player);
     }
 
+    // EQ assigns separate ID spaces to spawns / doors / drops / players,
+    // so the same id frequently lives in two of the four maps (e.g. NPC
+    // id=111 and Door id=111). Sort by (id, type) so the tiebreaker is
+    // stable across runs — id alone leaves the order at the mercy of
+    // std::sort's instability + Qt's per-process hash seed.
     std::sort(all.begin(), all.end(),
               [](const Item* a, const Item* b) {
-                  return a->id() < b->id();
+                  if (a->id() != b->id()) return a->id() < b->id();
+                  return a->type() < b->type();
               });
 
     for (const Item* item : all) {
