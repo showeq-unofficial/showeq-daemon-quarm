@@ -1376,14 +1376,18 @@ struct channelMessageStruct
 ** OpCode: emoteTextCode
 */
 
+// EQ Mac wire (FormattedMessage_Struct in EQMacEmu/common/eq_packet_structs.h):
+// 6-byte header + concatenated NUL-terminated args. EQMacEmu allocates
+// length+13 for the body case, leaving 7 trailing zero bytes after the
+// last arg's NUL — the parser must tolerate (and stop at) that padding.
+// (Live EQ used a wider header with length-prefixed args; this fork
+// targets EQMac only, so the live layout is gone.)
 struct formattedMessageStruct
 {
-/*0000*/ uint8_t  unknown0000;
-/*0001*/ uint8_t  unknown0001[4];                // ***Placeholder
-/*0005*/ uint32_t messageFormat;                 // Indicates the message format
-/*0009*/ ChatColor messageColor;                 // Message color
-/*0013*/ char     messages[0];                   // no longer null terminated
-						 // repeat (4-bytes len, string of len)
+/*0000*/ uint16_t unknown0000;
+/*0002*/ uint16_t messageFormat;                 // string_id
+/*0004*/ uint16_t messageColor;                  // type — cast to ChatColor at use
+/*0006*/ char     messages[0];                   // NUL-terminated args, concatenated
 };
 
 
@@ -1393,15 +1397,16 @@ struct formattedMessageStruct
 ** OPCode: OP_SpecialMesg
 */
 
+// EQ Mac wire (SpecialMesg_Struct in EQMacEmu/common/patches/mac_structs.h):
+// 4-byte msg_type header + NUL-terminated message text. There's no
+// sender/target split on this client — the live-EQ layout had those
+// fields embedded but EQMac sends a flat announcement payload. The
+// EQMac client treats msg_type as a 32-bit color/category code, the
+// same value MT_*** uses on the daemon side.
 struct specialMessageStruct
 {
-  /*0000*/ uint8_t   unknown0000[3];             // message style?
-  /*0003*/ ChatColor messageColor;               // message color
-  /*0007*/ uint16_t  target;                     // message target
-  /*0009*/ uint16_t  padding;                    // padding
-  /*0011*/ char      source[0];                  // message text
-  /*0xxx*/ uint32_t  unknown0xxx[3];             //***Placeholder
-  /*0yyy*/ char      message[0];                 // message text
+  /*0000*/ uint32_t  messageColor;               // msg_type
+  /*0004*/ char      message[0];                 // NUL-terminated text
 };
 
 /*

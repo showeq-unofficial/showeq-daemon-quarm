@@ -144,45 +144,40 @@ QString EQStr::formatMessage(uint32_t formatid,
 
   QString tempStr;
 
+    // EQMac wire body: NUL-terminated args concatenated, then trailing
+    // zero padding (EQMacEmu over-allocates by 7 bytes — see
+    // formattedMessageStruct in everquest.h). Walk strings until the
+    // padding hits (empty string) or argsLen is exhausted.
+    QVector<QString> argList;
+    argList.reserve(5);
+    {
+        const char* p = arguments;
+        const char* end = arguments + argsLen;
+        while (p < end)
+        {
+            const size_t remaining = static_cast<size_t>(end - p);
+            const size_t slen = strnlen(p, remaining);
+            if (slen == 0)
+                break;  // empty string => entered EQMacEmu's trailing padding
+            argList.push_back(QString::fromUtf8(p, slen));
+            p += slen;
+            if (p >= end) break;
+            ++p;        // step over the NUL
+        }
+    }
+
     if (formatStringRes.isEmpty())
     {
-	uint32_t arg_len;
-	unsigned char *cp;
-	tempStr = QString::asprintf( "Unknown: %04x:", formatid);
-	cp = (unsigned char *) arguments;
-	while (cp < ((unsigned char *) &arguments[argsLen] - sizeof(uint32_t)*sizeof(unsigned char))) {
-	    arg_len = (cp[0] << 0) | (cp[1] << 8) | (cp[2] << 16) | (cp[3] << 24);
-	    cp += 4;
-	    if (arg_len == 0 || arg_len > argsLen)
-		break;
-	    tempStr += " ";
-	    tempStr += QString::fromUtf8((const char *) cp, arg_len);
-	    cp += arg_len;
-	}
-	return tempStr;
+        tempStr = QString::asprintf("Unknown: %04x:", formatid);
+        for (const QString& a : argList)
+        {
+            tempStr += " ";
+            tempStr += a;
+        }
+        return tempStr;
     }
     else
     {
-	QVector<QString> argList;
-	argList.reserve(5); // reserve space for 5 elements to handle most common sizes
-
-	//Adjusted to handle prepended string length 05/28/2019
-	size_t totalArgsLen = 0;
-	const char* curArg;
-        uint32_t curSize = 0;
-	while (totalArgsLen < argsLen)
-	{
-	    curArg = arguments + totalArgsLen;
-            curSize = eqtohuint32((const uint8_t*) curArg);
-            curArg += 4;
-
-            if (curSize > 0) {
-	        // insert argument into the argument list
-	        argList.push_back(QString::fromUtf8(curArg, curSize));
-            }
-
-	    totalArgsLen += curSize + 4;
-	}
 
 	bool ok;
 	int curPos;

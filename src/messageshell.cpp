@@ -264,17 +264,19 @@ void MessageShell::formattedMessage(const uint8_t* data, size_t len, uint8_t dir
   if (dir == DIR_Client)
     return;
 
-  // EQ Mac OP_FormattedMessage wire is 12-40 bytes per opcode-stats. The
-  // 12-byte case is just the header (no message body); guard against
-  // size_t underflow in the messagesLen subtraction below.
+  // EQ Mac OP_FormattedMessage wire is 6-byte header + NUL-terminated
+  // arg strings (concatenated). EQMacEmu allocates length+13 so 7
+  // trailing zero bytes follow the last arg's NUL — formatMessage
+  // tolerates that padding. The minimum is 12 bytes (no-body case
+  // padded out by EQMacEmu's allocator); guard against underflow.
   const size_t kHeaderLen = offsetof(formattedMessageStruct, messages);
   if (len < kHeaderLen) return;
 
   const formattedMessageStruct* fmsg = (const formattedMessageStruct*)data;
-  QString tempStr;
 
   const size_t messagesLen = len - kHeaderLen;
-  const MessageType mt = chatColor2MessageType(fmsg->messageColor);
+  const MessageType mt =
+      chatColor2MessageType(static_cast<ChatColor>(fmsg->messageColor));
   const QString text = stripEqItemLinks(
       m_eqStrings->formatMessage(fmsg->messageFormat,
                                  fmsg->messages,
@@ -286,45 +288,29 @@ void MessageShell::formattedMessage(const uint8_t* data, size_t len, uint8_t dir
 }
 
 
-void MessageShell::specialMessage(const uint8_t* data, size_t, uint8_t dir)
+void MessageShell::specialMessage(const uint8_t* data, size_t len, uint8_t dir)
 {
   // avoid client chatter and do nothing if not viewing channel messages
   if (dir == DIR_Client)
     return;
 
+  // EQ Mac wire: 4-byte messageColor (msg_type) + NUL-terminated text.
+  // No embedded sender/target — server already substitutes any names
+  // into the message string before sending. See specialMessageStruct.
+  const size_t kHeaderLen = offsetof(specialMessageStruct, message);
+  if (len < kHeaderLen) return;
+
   const specialMessageStruct* smsg = (const specialMessageStruct*)data;
+  const size_t msgCap = len - kHeaderLen;
+  const size_t msgLen = strnlen(smsg->message, msgCap);
 
-  const Item* target = NULL;
+  const MessageType mt =
+      chatColor2MessageType(static_cast<ChatColor>(smsg->messageColor));
+  const QString text = stripEqItemLinks(
+      QString::fromLatin1(smsg->message, static_cast<int>(msgLen)));
 
-  if (smsg->target)
-    target = m_spawnShell->findID(tSpawn, smsg->target);
-
-  // calculate the message position
-  // const char* message = smsg->source + strlen(smsg->source) + 1
-  //  + sizeof(smsg->unknown0xxx);
-  // NOTE: gcc 8 (and maybe others) over-optimizes the above strlen call on the
-  // variable-sized source array (possibly because it isn't the last member
-  // of the struct), and as a result, strlen always returns 0 unless compiler
-  // optimizations are disabled.  So we work around this by creating a QString
-  // and using its size
-  const char* message = smsg->source + QString(smsg->source).length() + 1
-      + sizeof(smsg->unknown0xxx);
-
-  const MessageType mt = chatColor2MessageType(smsg->messageColor);
-  const QString sender = QString::fromLatin1(smsg->source);
-  const QString targetName = target ? target->name() : QString();
-  const QString text = stripEqItemLinks(QString::fromLatin1(message));
-
-  if (target) {
-    m_messages->addMessage(mt,
-        QString("Special: '%1' -> '%2' - %3").arg(sender, targetName, text));
-  } else {
-    m_messages->addMessage(mt,
-        QString("Special: '%1' - %2").arg(sender, text));
-  }
-  // Web chat panel keeps the structured fields (sender + target + text)
-  // and renders however it likes; no string concatenation on the wire.
-  emit chatMessage(static_cast<uint32_t>(mt), sender, targetName, text);
+  m_messages->addMessage(mt, QString("Special: %1").arg(text));
+  emit chatMessage(static_cast<uint32_t>(mt), QString(), QString(), text);
 }
 
 void MessageShell::guildMOTD(const uint8_t* data, size_t, uint8_t dir)
