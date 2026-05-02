@@ -121,7 +121,7 @@
 #define MAX_KNOWN_LANGS                 32
 #define MAX_SPELLBOOK_SLOTS             800
 #define MAX_GROUP_MEMBERS               6
-#define MAX_BUFFS                       42
+#define MAX_BUFFS                       15  // EQMac charProfileStruct.buffs[15]
 #define MAX_GUILDS                      32768
 #define MAX_AA                          300
 #define MAX_BANDOLIERS                  20

@@ -95,9 +95,11 @@ void MessageShell::channelMessage(const uint8_t* data, size_t len, uint8_t dir)
    channelMessageStruct *cmsg = new channelMessageStruct;
    memset(cmsg, 0, sizeof(channelMessageStruct));
 
-   // Bound-copy each NUL-terminated string field.
-   strncpy(cmsg->target, wire->target, sizeof(cmsg->target) - 1);
-   strncpy(cmsg->sender, wire->sender, sizeof(cmsg->sender) - 1);
+   // Bound-copy each NUL-terminated string field. cmsg was memset to 0
+   // above, so the trailing byte is already NUL — memcpy avoids the
+   // -Wstringop-truncation false positive that strncpy raises here.
+   memcpy(cmsg->target, wire->target, sizeof(cmsg->target) - 1);
+   memcpy(cmsg->sender, wire->sender, sizeof(cmsg->sender) - 1);
    cmsg->language        = wire->language;
    cmsg->chanNum         = wire->chanNum;
    cmsg->skillInLanguage = wire->skillInLanguage;
@@ -651,12 +653,15 @@ void MessageShell::beginCast(const uint8_t* data)
 
 void MessageShell::spellFaded(const uint8_t* data)
 {
-  const spellFadedStruct *sf = (const spellFadedStruct *)data;
+  // spellFadedStruct trails its `message` field with `char message[0]`; access
+  // through the typed lvalue trips -Warray-bounds. Read via byte offset.
+  const char* message = reinterpret_cast<const char*>(data)
+                        + offsetof(spellFadedStruct, message);
   QString tempStr;
 
-  if (strlen(sf->message) > 0)
+  if (strlen(message) > 0)
   {
-      tempStr = QString::asprintf( "Faded: %s", sf->message);
+      tempStr = QString::asprintf( "Faded: %s", message);
 
       m_messages->addMessage(MT_Spell, tempStr);
   }
