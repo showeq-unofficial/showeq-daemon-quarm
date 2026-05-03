@@ -187,6 +187,7 @@ void Player::reset()
   // (e.g. at the start of a --replay golden capture) we'd otherwise
   // emit whatever happened to be on the heap, breaking determinism.
   m_currentAApts = 0;
+  m_currentAAUnspent = 0;
   m_minExp = calc_exp(level() - 1, race(), classVal());
   m_maxExp = calc_exp(level(), race(), classVal ());
   m_tickExp = (m_maxExp - m_minExp) / 330;
@@ -342,9 +343,11 @@ void Player::loadProfile(const playerProfileStruct& player)
   memcpy (&m_spellBookSlots[0], &player.sSpellBook[0], sizeof(m_spellBookSlots));
 
   // Mac: aapoints is the unspent count; expAA is exp toward next AA point.
-  // Showeq's m_currentAApts tracked SPENT AAs, which Mac doesn't separately
-  // store. Use 0 as a placeholder until we track spent count elsewhere.
+  // m_currentAApts is the legacy "spent" tracker which the EQMac wire
+  // doesn't carry — leave it 0 and route Mac's unspent count into the
+  // dedicated m_currentAAUnspent field instead.
   m_currentAApts = 0;
+  m_currentAAUnspent = player.aapoints;
 
   // Buffs
   int buffnumber;
@@ -493,7 +496,11 @@ void Player::updateAltExp(const uint8_t* data)
     expIncrement = 0;
   }
 
-  m_currentAApts = altexp->aapoints;
+  // Mac altexp->aapoints is the unspent count after the tick (decrements
+  // when the player spends, increments when expAA wraps past a level).
+  // Don't write into m_currentAApts (legacy "spent" tracker, unused on
+  // Mac).
+  m_currentAAUnspent = altexp->aapoints;
   m_currentAltExp = realExp;
 
   emit expAltChangedInt(m_currentAltExp, 0, 15000000);
